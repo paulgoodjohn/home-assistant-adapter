@@ -1,0 +1,22 @@
+/*!
+ * @file
+ * @brief Sample configuration file.
+ */
+
+#ifndef config_h
+#define config_h
+
+#include <stdint.h>
+
+// #define MQTT_TLS // uncomment this define to enable TLS transport
+// #define MQTT_TLS_VERIFY // uncomment this define to enable broker certificate verification
+
+const char* ssid = "Your SSID";
+const char* password = "Your password";
+const char* mqtt_server = "homeassistant.local"; // eg. your-demo.cedalo.cloud or 192.168.1.11
+const uint16_t mqtt_server_port = 1883; // or 8883 most common for tls transport
+const char* mqttUser = "homeassistant";
+const char* mqttPassword = "Yahz2nihie2couJ8zootee1ae5aingi5caing6ucaicigha2Eeshiel7eew3Eith";
+const char* deviceId = "some_device"; // unique device identifier
+
+#endif

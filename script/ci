@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -e
+
+mv config/Config.h.sample config/Config.h
+mv config/Certificate.h.sample config/Certificate.h
+make
