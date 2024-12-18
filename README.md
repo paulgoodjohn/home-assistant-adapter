@@ -39,3 +39,6 @@ Opens the PlatformIO serial monitor to view a connected ESP32-C3's serial output
 ```shell
 make monitor
 ```
+
+## Example Home Assistant Configuration
+Sample yaml can be found in https://github.com/geappliances/home-assistant-examples
