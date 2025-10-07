@@ -2,7 +2,7 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include "Config.h"
-#include "HomeAssistantBridge.h"
+#include "HomeAssistantGea2Bridge.h"
 
 #ifdef MQTT_TLS
 static WiFiClientSecure wifiClient;
@@ -10,7 +10,7 @@ static WiFiClientSecure wifiClient;
 static WiFiClient wifiClient;
 #endif
 static PubSubClient mqttClient(wifiClient);
-static HomeAssistantBridge bridge;
+static HomeAssistantGea2Bridge bridge;
 
 static void connectToWifi()
 {
@@ -93,6 +93,7 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println();
+  Serial.println("GEA2 adapter startup");
 
   pinMode(LED_HEARTBEAT, OUTPUT);
   pinMode(LED_WIFI, OUTPUT);
@@ -101,13 +102,13 @@ void setup()
   configureWifi();
   configureMqtt();
 
-  Serial1.begin(HomeAssistantBridge::baud, SERIAL_8N1, D7, D6);
+  Serial1.begin(19200, SERIAL_8N1, D10, D9);
   bridge.begin(mqttClient, Serial1, deviceId);
 }
 
 void loop()
 {
-  connectToMqtt();
+  // connectToMqtt();
   bridge.loop();
   digitalWrite(LED_HEARTBEAT, millis() % 1000 < 500);
 }
