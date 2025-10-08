@@ -11,7 +11,10 @@
 #include "tiny_hsm.h"
 #include "tiny_timer.h"
 
+#define POLLING_LIST_MAX_SIZE 256
 typedef struct {
+  tiny_erd_t erd_polling_list[POLLING_LIST_MAX_SIZE];
+  uint16_t pollingListCount;
   tiny_timer_group_t* timer_group;
   i_tiny_gea2_erd_client_t* erd_client;
   i_mqtt_client_t* mqtt_client;
@@ -23,6 +26,7 @@ typedef struct {
   void* erd_set;
   tiny_gea2_erd_client_request_id_t request_id;
   uint8_t erd_host_address;
+  uint8_t appliance_type;
   const tiny_erd_t* applianceErdList;
   uint16_t applianceErdListCount;
   uint16_t erd_index;
