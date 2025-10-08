@@ -19,8 +19,13 @@ typedef struct {
   tiny_event_subscription_t mqtt_write_request_subscription;
   tiny_event_subscription_t mqtt_disconnect_subscription;
   tiny_event_subscription_t erd_client_activity_subscription;
+  tiny_hsm_t hsm;
   void* erd_set;
-  uint8_t request_id;
+  tiny_gea2_erd_client_request_id_t request_id;
+  uint8_t erd_host_address;
+  const tiny_erd_t* applianceErdList;
+  uint16_t applianceErdListCount;
+  uint16_t erd_index;
 } Gea2MqttBridge_t;
 
 /*!

@@ -14,29 +14,203 @@ extern "C" {
 
 #include <set>
 
+#include "ErdLists.h"
+
 using namespace std;
+
+enum {
+  retry_delay = 1000,
+};
+
+enum {
+  signal_start = tiny_hsm_signal_user_start,
+  signal_timer_expired,
+  signal_read_failed,
+  signal_read_completed,
+  signal_mqtt_disconnected,
+  signal_write_requested
+};
 
 typedef Gea2MqttBridge_t self_t;
 
-static void erd_client_activity(void* _self, const void* _args)
+static void arm_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
 {
-  reinterpret(self, _self, self_t*);
-  reinterpret(args, _args, const tiny_gea2_erd_client_on_activity_args_t*);
-  // const tiny_gea2_erd_client_on_activity_args_t* args = (const tiny_gea2_erd_client_on_activity_args_t*)_args;
-
-  (void)self;
-
-  Serial.println("Erd activity, type=" + String(args->type) + " address " + String(args->address));
-  if(args->type == tiny_gea2_erd_client_activity_type_read_completed) {
-    // targetAddress = args->address;
-
-    Serial.println("Erd " + String(args->read_completed.erd));
-
-    const uint8_t* ptr = (const uint8_t*)args->read_completed.data;
-    uint8_t applianceType = *ptr;
-    Serial.println("Read " + String(applianceType));
-  }
+  tiny_timer_start(
+    self->timer_group, &self->timer, ticks, self, +[](void* context) {
+      tiny_hsm_send_signal(&reinterpret_cast<Gea2MqttBridge_t*>(context)->hsm, signal_timer_expired, nullptr);
+    });
 }
+
+static void arm_periodic_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
+{
+  tiny_timer_start_periodic(
+    self->timer_group, &self->timer, ticks, self, +[](void* context) {
+      tiny_hsm_send_signal(&reinterpret_cast<Gea2MqttBridge_t*>(context)->hsm, signal_timer_expired, nullptr);
+    });
+}
+
+static void disarm_timer(Gea2MqttBridge_t* self)
+{
+  tiny_timer_stop(self->timer_group, &self->timer);
+}
+
+static set<tiny_erd_t>& erd_set(Gea2MqttBridge_t* self)
+{
+  return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
+}
+
+static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t state_starting_up(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t state_building_poll_list(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+
+static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+{
+  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  (void)data;
+
+  switch(signal) {
+    case signal_write_requested: {
+      auto args = reinterpret_cast<const mqtt_client_on_write_request_args_t*>(data);
+      tiny_gea2_erd_client_write(self->erd_client, &self->request_id, self->erd_host_address, args->erd, args->value, args->size);
+    } break;
+
+    default:
+      return tiny_hsm_result_signal_deferred;
+  }
+
+  return tiny_hsm_result_signal_consumed;
+}
+
+static tiny_hsm_result_t state_starting_up(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+{
+  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
+
+  switch(signal) {
+    case tiny_hsm_signal_entry: {
+      self->erd_host_address = tiny_gea_broadcast_address;
+    }
+      __attribute__((fallthrough));
+
+    case signal_timer_expired: {
+      if(!tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, 0x0008)) {
+        arm_timer(self, retry_delay);
+      }
+      break;
+    }
+    case signal_read_completed: {
+      disarm_timer(self);
+      if(args->read_completed.erd == 0x0008) {
+        self->erd_host_address = args->address;
+      }
+
+      const uint8_t* applianceTypeResponse = (const uint8_t*)args->read_completed.data;
+      self->applianceErdList = applianceTypeToErdGroupTranslation[*applianceTypeResponse].erdList;
+      self->applianceErdListCount = applianceTypeToErdGroupTranslation[*applianceTypeResponse].erdCount;
+
+      tiny_hsm_transition(hsm, state_building_poll_list);
+      break;
+    }
+    case tiny_hsm_signal_exit: {
+      disarm_timer(self);
+      break;
+    }
+    default:
+      return tiny_hsm_result_signal_deferred;
+  }
+
+  return tiny_hsm_result_signal_consumed;
+}
+
+static tiny_hsm_result_t state_building_poll_list(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+{
+  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
+  switch(signal) {
+    case tiny_hsm_signal_entry:
+      self->erd_index = 0;
+      tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
+      arm_timer(self, retry_delay);
+      break;
+
+    case signal_timer_expired:
+      Serial.print(".");
+      self->erd_index++;
+      if(self->erd_index >= self->applianceErdListCount) {
+        Serial.println("End of the list - timer expire");
+      }
+      else {
+        tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
+        arm_timer(self, retry_delay);
+      }
+      break;
+
+    case signal_read_completed:
+      disarm_timer(self);
+      if(args->read_completed.erd == self->applianceErdList[self->erd_index]) {
+        char buffer[40];
+        sprintf(buffer, "Read erd %04X ok, length was %d\n", args->read_completed.erd, args->read_completed.data_size);
+        Serial.print(buffer);
+      }
+      self->erd_index++;
+      if(self->erd_index >= self->applianceErdListCount) {
+        Serial.println("End of the list - read worked");
+      }
+      else {
+        tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
+        arm_timer(self, retry_delay);
+      }
+      break;
+
+    default:
+      return tiny_hsm_result_signal_deferred;
+  }
+
+  return tiny_hsm_result_signal_consumed;
+}
+
+static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+{
+  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
+  (void)self;
+  (void)args;
+  Serial.println("state_polling");
+  switch(signal) {
+      // case tiny_hsm_signal_entry:
+      //  arm_periodic_timer(self, subscription_retention_period);
+      // break;
+
+      // case signal_timer_expired:
+      //  tiny_gea3_erd_client_retain_subscription(self->erd_client, erd_host_address);
+      // break;
+
+      // case signal_mqtt_disconnected:
+      // tiny_hsm_transition(hsm, state_starting_up);
+      // break;
+
+      // case tiny_hsm_signal_exit:
+      // disarm_timer(self);
+      // break;
+
+    default:
+      return tiny_hsm_result_signal_deferred;
+  }
+
+  return tiny_hsm_result_signal_consumed;
+}
+
+static const tiny_hsm_state_descriptor_t hsm_state_descriptors[] = {
+  { .state = state_top, .parent = nullptr },
+  { .state = state_starting_up, .parent = state_top },
+  { .state = state_building_poll_list, .parent = state_top },
+  { .state = state_polling, .parent = state_top }
+};
+static const tiny_hsm_configuration_t hsm_configuration = {
+  .states = hsm_state_descriptors,
+  .state_count = element_count(hsm_state_descriptors)
+};
 
 void gea2_mqtt_bridge_init(
   self_t* self,
@@ -44,22 +218,57 @@ void gea2_mqtt_bridge_init(
   i_tiny_gea2_erd_client_t* erd_client,
   i_mqtt_client_t* mqtt_client)
 {
-  Serial.println("bridge init start");
+  Serial.println("Bridge init start");
   self->timer_group = timer_group;
   self->erd_client = erd_client;
   self->mqtt_client = mqtt_client;
   self->erd_set = reinterpret_cast<void*>(new set<tiny_erd_t>());
 
-  tiny_event_subscription_init(&self->erd_client_activity_subscription, self, erd_client_activity);
-  tiny_event_subscribe(tiny_gea2_erd_client_on_activity(self->erd_client), &self->erd_client_activity_subscription);
+  tiny_event_subscription_init(
+    &self->erd_client_activity_subscription, self, +[](void* context, const void* _args) {
+      auto self = reinterpret_cast<Gea2MqttBridge_t*>(context);
+      auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(_args);
 
-  if(tiny_gea2_erd_client_read(self->erd_client, &self->request_id, tiny_gea_broadcast_address, 0x0008)) {
-    Serial.println("Queued read erd 0x0008");
-  }
-  else {
-    Serial.println("Failed to read erd 0x0008");
-  }
-  Serial.println("bridge init done");
+      switch(args->type) {
+        case tiny_gea2_erd_client_activity_type_read_completed:
+          tiny_hsm_send_signal(&self->hsm, signal_read_completed, args);
+          break;
+
+        case tiny_gea2_erd_client_activity_type_read_failed:
+          tiny_hsm_send_signal(&self->hsm, signal_read_failed, args);
+          break;
+
+        case tiny_gea2_erd_client_activity_type_write_completed:
+          mqtt_client_update_erd_write_result(self->mqtt_client, args->write_completed.erd, true, 0);
+          break;
+
+        case tiny_gea2_erd_client_activity_type_write_failed:
+          mqtt_client_update_erd_write_result(self->mqtt_client, args->write_failed.erd, false, args->write_failed.reason);
+          break;
+      }
+    });
+  tiny_event_subscribe(tiny_gea2_erd_client_on_activity(erd_client), &self->erd_client_activity_subscription);
+
+  tiny_event_subscription_init(
+    &self->mqtt_write_request_subscription, self, +[](void* context, const void* _args) {
+      auto self = reinterpret_cast<Gea2MqttBridge_t*>(context);
+      auto args = reinterpret_cast<const mqtt_client_on_write_request_args_t*>(_args);
+      tiny_hsm_send_signal(&self->hsm, signal_write_requested, args);
+    });
+  tiny_event_subscribe(mqtt_client_on_write_request(mqtt_client), &self->mqtt_write_request_subscription);
+
+  tiny_event_subscription_init(
+    &self->mqtt_disconnect_subscription, self, +[](void* context, const void*) {
+      auto self = reinterpret_cast<Gea2MqttBridge_t*>(context);
+      reinterpret_cast<set<tiny_erd_t>*>(self->erd_set)->clear();
+      tiny_hsm_send_signal(&self->hsm, signal_mqtt_disconnected, nullptr);
+    });
+  tiny_event_subscribe(mqtt_client_on_mqtt_disconnect(mqtt_client), &self->mqtt_disconnect_subscription);
+
+  Serial.println("Start HSM");
+  tiny_hsm_init(&self->hsm, &hsm_configuration, state_starting_up);
+
+  Serial.println("Bridge init done");
 }
 
 void gea2_mqtt_bridge_destroy(self_t* self)
