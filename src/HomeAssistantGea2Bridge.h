@@ -23,7 +23,6 @@ class HomeAssistantGea2Bridge {
   static constexpr unsigned long baud = 19200;
 
   void begin(PubSubClient& client, Stream& uart, const char* deviceId, uint8_t clientAddress = 0xE4);
-  void deviceAddress(uint8_t deviceAddress);
   void loop();
   void notifyMqttDisconnected();
 
@@ -47,8 +46,6 @@ class HomeAssistantGea2Bridge {
   tiny_gea2_erd_client_request_id_t requestId;
 
   tiny_event_subscription_t activity;
-  uint8_t targetAddress;
-  bool firstApplianceType;
 
   Gea2MqttBridge_t gea2_mqtt_bridge;
 };

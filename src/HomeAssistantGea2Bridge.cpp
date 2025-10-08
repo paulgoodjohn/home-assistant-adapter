@@ -51,8 +51,6 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
     false,
     3);
 
-  targetAddress = 0xFF; // Start with broadcast
-
   Serial.println("GEA2 erd client startup");
   tiny_gea2_erd_client_init(
     &erd_client,
@@ -69,11 +67,6 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
     &erd_client.interface,
     &client_adapter.interface);
   Serial.println("GEA2 bridge started");
-}
-
-void HomeAssistantGea2Bridge::deviceAddress(uint8_t deviceAddress)
-{
-  targetAddress = deviceAddress;
 }
 
 void HomeAssistantGea2Bridge::loop()
