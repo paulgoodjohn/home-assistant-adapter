@@ -20,13 +20,13 @@ typedef struct {
   tiny_event_subscription_t mqtt_disconnect_subscription;
   tiny_event_subscription_t erd_client_activity_subscription;
   void* erd_set;
-  tiny_hsm_t hsm;
+  uint8_t request_id;
 } Gea2MqttBridge_t;
 
 /*!
  * Initialize the MQTT bridge.
  */
-void mqtt_bridge_init(
+void gea2_mqtt_bridge_init(
   Gea2MqttBridge_t* self,
   tiny_timer_group_t* timer_group,
   i_tiny_gea2_erd_client_t* erd_client,
@@ -35,7 +35,7 @@ void mqtt_bridge_init(
 /*!
  * Destroy the MQTT bridge.
  */
-void mqtt_bridge_destroy(
+void gea2_mqtt_bridge_destroy(
   Gea2MqttBridge_t* self);
 
 #endif

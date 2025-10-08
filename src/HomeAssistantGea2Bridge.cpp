@@ -7,7 +7,6 @@
 #include "HomeAssistantGea2Bridge.h"
 
 extern "C" {
-#include "i_tiny_gea2_erd_client.h"
 #include "tiny_time_source.h"
 }
 
@@ -15,27 +14,6 @@ static const tiny_gea2_erd_client_configuration_t client_configuration = {
   .request_timeout = 250,
   .request_retries = 10
 };
-
-typedef i_tiny_gea2_erd_client_t self_t;
-
-static void initial_erd_activity(void* _self, const void* _args)
-{
-  (void)_self;
-  const tiny_gea2_erd_client_on_activity_args_t* args = (const tiny_gea2_erd_client_on_activity_args_t*)_args;
-  Serial.println("Erd activity, type=" + String(args->type) + " address " + String(args->address));
-  if(args->type == tiny_gea2_erd_client_activity_type_read_completed) {
-    // targetAddress = args->address;
-
-    Serial.println("Erd " + String(args->read_completed.erd));
-
-    // if(firstApplianceType) {
-    //   firstApplianceType = false;
-    const uint8_t* ptr = (const uint8_t*)args->read_completed.data;
-    uint8_t applianceType = *ptr;
-    Serial.println("Read " + String(applianceType));
-    //}
-  }
-}
 
 void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, const char* deviceId, uint8_t clientAddress)
 {
@@ -84,24 +62,13 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
     sizeof(client_queue_buffer),
     &client_configuration);
 
-  // Serial.println("MQTT bridge init");
-  // mqtt_bridge_init(
-  //   &mqtt_bridge,
-  //   &timer_group,
-  //   &erd_client.interface,
-  //   &client_adapter.interface);
+  Serial.println("MQTT bridge init");
+  gea2_mqtt_bridge_init(
+    &gea2_mqtt_bridge,
+    &timer_group,
+    &erd_client.interface,
+    &client_adapter.interface);
   Serial.println("GEA2 bridge started");
-
-  firstApplianceType = true;
-  tiny_event_subscription_init(&activity, NULL, initial_erd_activity);
-  tiny_event_subscribe(tiny_gea2_erd_client_on_activity(&erd_client.interface), &activity);
-
-  if(tiny_gea2_erd_client_read(&erd_client.interface, &requestId, targetAddress, 0x0008)) {
-    Serial.println("Queued read erd 0x0008");
-  }
-  else {
-    Serial.println("Failed to read erd 0x0008");
-  }
 }
 
 void HomeAssistantGea2Bridge::deviceAddress(uint8_t deviceAddress)

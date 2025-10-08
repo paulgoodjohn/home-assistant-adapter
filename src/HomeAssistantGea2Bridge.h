@@ -50,7 +50,7 @@ class HomeAssistantGea2Bridge {
   uint8_t targetAddress;
   bool firstApplianceType;
 
-  // Gea2MqttBridge_t mqtt_bridge;
+  Gea2MqttBridge_t gea2_mqtt_bridge;
 };
 
 #endif

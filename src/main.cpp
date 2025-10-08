@@ -102,7 +102,7 @@ void setup()
   configureWifi();
   configureMqtt();
 
-  Serial1.begin(19200, SERIAL_8N1, D10, D9);
+  Serial1.begin(HomeAssistantGea2Bridge::baud, SERIAL_8N1, D10, D9);
   bridge.begin(mqttClient, Serial1, deviceId);
 }
 
