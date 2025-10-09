@@ -54,10 +54,10 @@ static void disarm_timer(Gea2MqttBridge_t* self)
   tiny_timer_stop(self->timer_group, &self->timer);
 }
 
-// static set<tiny_erd_t>& erd_set(Gea2MqttBridge_t* self)
-//{
-//   return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
-// }
+static set<tiny_erd_t>& erd_set(Gea2MqttBridge_t* self)
+{
+  return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
+}
 
 static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
 static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
@@ -144,6 +144,12 @@ static bool SendNextReadRequest(Gea2MqttBridge_t* self)
 static void AddErdToPollingList(Gea2MqttBridge_t* self, tiny_erd_t erd)
 {
   char buffer[40];
+
+  if(erd_set(self).find(erd) == erd_set(self).end()) {
+    mqtt_client_register_erd(self->mqtt_client, erd);
+    erd_set(self).insert(erd);
+  }
+
   self->erd_polling_list[self->pollingListCount] = erd;
   self->pollingListCount++;
   sprintf(buffer, "#%d Rcv erd %04X tx erd %04X\n", self->pollingListCount, erd, self->applianceErdList[self->erd_index]);
@@ -304,7 +310,13 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
     case signal_read_completed:
       disarm_timer(self);
 
-      sprintf(buffer, "Poll read erd %04X length %d\n", args->read_completed.erd, args->read_completed.data_size);
+      mqtt_client_update_erd(
+        self->mqtt_client,
+        args->read_completed.erd,
+        args->read_completed.data,
+        args->read_completed.data_size);
+
+      sprintf(buffer, "Poll read erd %04X\n", args->read_completed.erd);
       Serial.print(buffer);
 
       SendNextPollReadRequest(self);

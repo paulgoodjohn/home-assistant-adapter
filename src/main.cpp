@@ -108,7 +108,7 @@ void setup()
 
 void loop()
 {
-  // connectToMqtt();
+  connectToMqtt();
   bridge.loop();
   digitalWrite(LED_HEARTBEAT, millis() % 1000 < 500);
 }
