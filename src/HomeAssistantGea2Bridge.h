@@ -39,10 +39,10 @@ class HomeAssistantGea2Bridge {
 
   tiny_gea2_interface_t gea2_interface;
   uint8_t receive_buffer[255];
-  uint8_t send_queue_buffer[1000];
+  uint8_t send_queue_buffer[10000];
 
   tiny_gea2_erd_client_t erd_client;
-  uint8_t client_queue_buffer[1024];
+  uint8_t client_queue_buffer[8096];
   tiny_gea2_erd_client_request_id_t requestId;
 
   tiny_event_subscription_t activity;

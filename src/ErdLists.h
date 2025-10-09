@@ -1992,6 +1992,13 @@ const tiny_erd_t airConditioningErds[] = {
 };
 const uint16_t airConditioningErdCount = sizeof(airConditioningErds) / sizeof(airConditioningErds[0]);
 
+const tiny_erd_t waterFilterErds[] = {
+  0x8000,
+  0x8001,
+  0x8002
+};
+const uint16_t waterFilterErdCount = sizeof(waterFilterErds) / sizeof(waterFilterErds[0]);
+
 const tiny_erd_t smallApplianceErds[] = {
   0x9000,
   0x9001,
@@ -2334,84 +2341,67 @@ const tiny_erd_t energyErds[] = {
 };
 const uint16_t energyErdCount = sizeof(energyErds) / sizeof(energyErds[0]);
 
-enum {
-  common = 0x0,
-  refrigeration = 0x1,
-  laundry = 0x2,
-  dishwasher = 0x3,
-  waterheater = 0x4,
-  range = 0x5,
-  airconditioning = 0x7,
-  waterfilter = 0x8,
-  smallappliance = 0x9,
-  commonenergy = 0xd
-};
-
 typedef struct {
   const tiny_erd_t* erdList;
   uint16_t erdCount;
 } applianceTypeToErdListAndCount_t;
 
 const applianceTypeToErdListAndCount_t applianceTypeToErdGroupTranslation[] = {
-  { waterHeaterErds, waterHeaterErdCount },
-  { laundryErds, laundryErdCount },
-  { laundryErds, laundryErdCount },
-  { refrigerationErds, refrigerationErdCount },
-  { smallApplianceErds, smallApplianceErdCount }
+  { waterHeaterErds, waterHeaterErdCount }, // 0x00 = Water heater
+  { laundryErds, laundryErdCount }, // 0x01 = Clothes washer
+  { laundryErds, laundryErdCount }, // 0x02 = Clothes dryer
+  { refrigerationErds, refrigerationErdCount }, // 0x03 = Refrigerator
+  { smallApplianceErds, smallApplianceErdCount }, // 0x04 = Microwave
+  { rangeErds, rangeErdCount }, // 0x05 = Advantium
+  { dishWasherErds, dishWasherErdCount }, // 0x06 = Dishwasher
+  { rangeErds, rangeErdCount }, // 0x07 = Oven
+  { rangeErds, rangeErdCount }, // 0x08 = Electric range
+  { rangeErds, rangeErdCount }, // 0x09 = Gas range
+  { airConditioningErds, airConditioningErdCount }, // 0x0A = Thermostat/RAC
+  { rangeErds, rangeErdCount }, // 0x0B = Electric Cooktop
+  { rangeErds, rangeErdCount }, // 0x0C = Pizza Oven
+  { rangeErds, rangeErdCount }, // 0x0D = Gas Cooktop
+  { airConditioningErds, airConditioningErdCount }, // 0x0E = Split / DFS (Duct-Free Split) AC
+  { rangeErds, rangeErdCount }, // 0x0F = Hood
+  { waterFilterErds, waterFilterErdCount }, // 0x10 = Point of Entry Water Filter
+  { rangeErds, rangeErdCount }, // 0x11 = Induction Cooktop
+  { refrigerationErds, refrigerationErdCount }, // 0x12 = Delivery Box
+  { rangeErds, rangeErdCount }, // 0x13 = Kitchen Hub Vent Hood
+  { airConditioningErds, airConditioningErdCount }, // 0x14 = Zoneline/PTAC
+  { waterFilterErds, waterFilterErdCount }, // 0x15 = Water Softener
+  { airConditioningErds, airConditioningErdCount }, // 0x16 = Portable AC
+  { laundryErds, laundryErdCount }, // 0x17 = Combination Washer Dryer
+  { refrigerationErds, refrigerationErdCount }, // 0x18 = Dual Zone Wine Chiller
+  { refrigerationErds, refrigerationErdCount }, // 0x19 = Beverage Center
+  { smallApplianceErds, smallApplianceErdCount }, // 0x1A = Coffee Brewer
+  { smallApplianceErds, smallApplianceErdCount }, // 0x1B = Opal Nugget Ice Maker
+  { refrigerationErds, refrigerationErdCount }, // 0x1C = In-Home Grower
+  { airConditioningErds, airConditioningErdCount }, // 0x1D = Dehumidifer
+  { refrigerationErds, refrigerationErdCount }, // 0x1E = Under Counter Ice Maker
+  { airConditioningErds, airConditioningErdCount }, // 0x1F = Through Wall AC
+  { dishWasherErds, dishWasherErdCount }, // 0x20 = F&P DishDrawer
+  { smallApplianceErds, smallApplianceErdCount }, // 0x21 = Espresso Coffee Maker
+  { smallApplianceErds, smallApplianceErdCount }, // 0x22 = Toaster Oven
+  { airConditioningErds, airConditioningErdCount }, // 0x23 = Zoneline/VTAC
+  { airConditioningErds, airConditioningErdCount }, // 0x24 = Central DFS (Duct-Free Split) Controller
+  { smallApplianceErds, smallApplianceErdCount }, // 0x25 = BLE Mesh Gateway
+  { smallApplianceErds, smallApplianceErdCount }, // 0x26 = Stand Mixer
+  { rangeErds, rangeErdCount }, // 0x27 = Fisher & Paykel Cooktop
+  { rangeErds, rangeErdCount }, // 0x28 = Fisher & Paykel Cooktop Teppanyaki
+  { rangeErds, rangeErdCount }, // 0x29 = Fisher & Paykel Ventilation Downdraft
+  { smallApplianceErds, smallApplianceErdCount }, // 0x2A = Smart Plug
+  { smallApplianceErds, smallApplianceErdCount }, // 0x2B = Smoker
+  { airConditioningErds, airConditioningErdCount }, // 0x2C = Air Handler VRF
+  { laundryErds, laundryErdCount }, // 0x2D = Fabric Care Cabinet Closet
+  { laundryErds, laundryErdCount }, // 0x2E = Laundry Center
+  { rangeErds, rangeErdCount }, // 0x2F = Grill
+  { refrigerationErds, refrigerationErdCount }, // 0x30 = Freezer
+  { rangeErds, rangeErdCount }, // 0x31 = Warming Drawer
+  { smallApplianceErds, smallApplianceErdCount }, // 0x32 = Vacuum Seal Drawer
+  { refrigerationErds, refrigerationErdCount }, // 0x33 = Wine Cabinet
+  { airConditioningErds, airConditioningErdCount }, // 0x34 = Central AC
+  { rangeErds, rangeErdCount }, // 0x35 = Hearth Pizza Oven
+  { smallApplianceErds, smallApplianceErdCount }, // 0x36 = Sourdough Starter
 };
-#if 0
-  smallappliance, // Microwave = 4,
-  range, // Advantium = 5,
-  dishwasher, // Dishwasher = 6,
-  range, // Oven = 7,
-  range, // Electric Range = 8,
-  range, // Gas Range = 9,
-  airconditioning, // Thermostat/RAC = 10,
-  range, // Electric Cooktop = 11,
-  range, // Pizza Oven = 12,
-  range, // Gas Cooktop = 13,
-  airconditioning, // Split / DFS (Duct-Free Split) AC = 14,
-  range, // Hood = 15,
-  waterfilter, // Point of Entry Water Filter = 16,
-  range, // Induction Cooktop = 17,
-  refrigeration, // Delivery Box = 18,
-  range, // Kitchen Hub Vent Hood = 19,
-  airconditioning, // Zoneline/PTAC = 20,
-  waterfilter, // Water Softener = 21,
-  airconditioning, // Portable AC = 22,
-  laundry, // Combination Washer Dryer = 23,
-  refrigeration, // Dual Zone Wine Chiller = 24,
-  refrigeration, // Beverage Center = 25,
-  smallappliance, // Coffee Brewer = 26,
-  smallappliance, // Opal Nugget Ice Maker = 27,
-  refrigeration, // In-Home Grower = 28,
-  smallappliance, // Dehumidifer = 29,
-  refrigeration, // Under Counter Ice Maker = 30,
-  airconditioning, // Through Wall AC = 31,
-  dishwasher, // F&P DishDrawer = 32,
-  smallappliance, // Espresso Coffee Maker = 33,
-  smallappliance, // Toaster Oven = 34,
-  airconditioning, // Zoneline/Vertical = 35,
-  airconditioning, // Central DFS (Duct-Free Split) Controller = 36,
-  smallappliance, // BLE Mesh Gateway = 37,
-  smallappliance, // Stand Mixer = 38,
-  range, // Fisher & Paykel Cooktop = 39,
-  range, // F&P Cooktop Teppanyaki = 40,
-  range, // F&P Ventilation Downdraft = 41,
-  smallappliance, // Smart Plug = 42,
-  smallappliance, // Smoker = 43,
-  airconditioning, // Air Handler VRF = 44,
-  laundry, // Fabric Care Cabinet Closet = 45,
-  laundry, // Laundry Center = 46,
-  range, // Grill = 47,
-  refrigeration, // Freezer = 48,
-  range, // Warming Drawer = 49,
-  smallappliance, // Vacuum Seal Drawer = 50,
-  refrigeration, // Wine Cabinet = 51,
-  airconditioning, // Central AC = 52,
-  airconditioning, // Soft Starter = 53,
-  range, // Hearth Pizza Oven = 54,
-  smallappliance // Sourdough Starter = 55,
-};
-#endif
+const uint16_t maximumApplianceType = sizeof(applianceTypeToErdGroupTranslation) / sizeof(applianceTypeToErdGroupTranslation[0]);
 #endif

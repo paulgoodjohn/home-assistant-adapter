@@ -41,26 +41,26 @@ static void arm_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
     });
 }
 
-static void arm_periodic_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
-{
-  tiny_timer_start_periodic(
-    self->timer_group, &self->timer, ticks, self, +[](void* context) {
-      tiny_hsm_send_signal(&reinterpret_cast<Gea2MqttBridge_t*>(context)->hsm, signal_timer_expired, nullptr);
-    });
-}
+// static void arm_periodic_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
+//{
+//   tiny_timer_start_periodic(
+//     self->timer_group, &self->timer, ticks, self, +[](void* context) {
+//       tiny_hsm_send_signal(&reinterpret_cast<Gea2MqttBridge_t*>(context)->hsm, signal_timer_expired, nullptr);
+//     });
+// }
 
 static void disarm_timer(Gea2MqttBridge_t* self)
 {
   tiny_timer_stop(self->timer_group, &self->timer);
 }
 
-static set<tiny_erd_t>& erd_set(Gea2MqttBridge_t* self)
-{
-  return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
-}
+// static set<tiny_erd_t>& erd_set(Gea2MqttBridge_t* self)
+//{
+//   return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
+// }
 
 static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
-static tiny_hsm_result_t state_starting_up(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
 static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
 static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
 static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
@@ -84,7 +84,7 @@ static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, co
   return tiny_hsm_result_signal_consumed;
 }
 
-static tiny_hsm_result_t state_starting_up(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
@@ -109,6 +109,9 @@ static tiny_hsm_result_t state_starting_up(tiny_hsm_t* hsm, tiny_hsm_signal_t si
 
       const uint8_t* applianceTypeResponse = (const uint8_t*)args->read_completed.data;
       self->appliance_type = *applianceTypeResponse;
+      if(self->appliance_type >= maximumApplianceType) {
+        self->appliance_type = 0;
+      }
       tiny_hsm_transition(hsm, state_add_common_erds);
       break;
     }
@@ -286,11 +289,12 @@ static void SendNextPollReadRequest(Gea2MqttBridge_t* self)
 
 static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
+  char buffer[40];
   Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   (void)self;
   (void)args;
-  Serial.println("state_polling");
+
   switch(signal) {
     case tiny_hsm_signal_entry:
     case signal_timer_expired:
@@ -299,11 +303,15 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
 
     case signal_read_completed:
       disarm_timer(self);
+
+      sprintf(buffer, "Poll read erd %04X length %d\n", args->read_completed.erd, args->read_completed.data_size);
+      Serial.print(buffer);
+
       SendNextPollReadRequest(self);
       break;
 
     case signal_mqtt_disconnected:
-      tiny_hsm_transition(hsm, state_starting_up);
+      tiny_hsm_transition(hsm, state_identify_appliance);
       break;
 
     case tiny_hsm_signal_exit:
@@ -319,7 +327,7 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
 
 static const tiny_hsm_state_descriptor_t hsm_state_descriptors[] = {
   { .state = state_top, .parent = nullptr },
-  { .state = state_starting_up, .parent = state_top },
+  { .state = state_identify_appliance, .parent = state_top },
   { .state = state_add_common_erds, .parent = state_top },
   { .state = state_add_energy_erds, .parent = state_top },
   { .state = state_add_appliance_erds, .parent = state_top },
@@ -384,7 +392,7 @@ void gea2_mqtt_bridge_init(
   tiny_event_subscribe(mqtt_client_on_mqtt_disconnect(mqtt_client), &self->mqtt_disconnect_subscription);
 
   Serial.println("Start HSM");
-  tiny_hsm_init(&self->hsm, &hsm_configuration, state_starting_up);
+  tiny_hsm_init(&self->hsm, &hsm_configuration, state_identify_appliance);
 
   Serial.println("Bridge init done");
 }
