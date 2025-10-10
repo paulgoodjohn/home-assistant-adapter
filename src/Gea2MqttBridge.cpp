@@ -153,8 +153,8 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
       break;
     }
     case signal_read_completed: {
-      reset_lost_appliance_timer(self);
       disarm_timer(self);
+      reset_lost_appliance_timer(self);
       if(args->read_completed.erd == 0x0008) {
         self->erd_host_address = args->address;
       }
@@ -180,6 +180,7 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
 
 static bool SendNextReadRequest(self_t* self)
 {
+  reset_lost_appliance_timer(self);
   self->erd_index++;
   bool more_erds_to_try = (self->erd_index < self->applianceErdListCount);
   if(more_erds_to_try) {
@@ -228,8 +229,13 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
     case signal_read_completed:
       disarm_timer(self);
-      reset_lost_appliance_timer(self);
       AddErdToPollingList(self, args->read_completed.erd);
+      mqtt_client_update_erd(
+        self->mqtt_client,
+        args->read_completed.erd,
+        args->read_completed.data,
+        args->read_completed.data_size);
+
       if(!SendNextReadRequest(self)) {
         tiny_hsm_transition(hsm, state_add_energy_erds);
       }
@@ -265,8 +271,13 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
     case signal_read_completed:
       disarm_timer(self);
-      reset_lost_appliance_timer(self);
       AddErdToPollingList(self, args->read_completed.erd);
+      mqtt_client_update_erd(
+        self->mqtt_client,
+        args->read_completed.erd,
+        args->read_completed.data,
+        args->read_completed.data_size);
+
       if(!SendNextReadRequest(self)) {
         tiny_hsm_transition(hsm, state_add_appliance_erds);
       }
@@ -304,8 +315,13 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
 
     case signal_read_completed:
       disarm_timer(self);
-      reset_lost_appliance_timer(self);
       AddErdToPollingList(self, args->read_completed.erd);
+      mqtt_client_update_erd(
+        self->mqtt_client,
+        args->read_completed.erd,
+        args->read_completed.data,
+        args->read_completed.data_size);
+
       if(!SendNextReadRequest(self)) {
         save_polling_list_to_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
@@ -321,13 +337,10 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
 
 static void SendNextPollReadRequest(self_t* self)
 {
-  // char buffer[40];
   self->erd_index++;
   if(self->erd_index >= self->pollingListCount) {
     self->erd_index = 0;
   }
-  // sprintf(buffer, "Poll erd %04X\n", self->erd_polling_list[self->erd_index]);
-  // Serial.print(buffer);
   self->request_id++;
   tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->erd_polling_list[self->erd_index]);
   arm_timer(self, retry_delay);
@@ -335,7 +348,6 @@ static void SendNextPollReadRequest(self_t* self)
 
 static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  // char buffer[40];
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
 
@@ -351,7 +363,6 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
     case signal_read_completed:
       disarm_timer(self);
       reset_lost_appliance_timer(self);
-
       mqtt_client_update_erd(
         self->mqtt_client,
         args->read_completed.erd,
