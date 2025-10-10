@@ -187,7 +187,6 @@ const tiny_erd_t refrigerationErds[] = {
   0x115d,
   0x115e,
   0x115f,
-#if 0
   0x1160,
   0x1161,
   0x1162,
@@ -531,7 +530,6 @@ const tiny_erd_t refrigerationErds[] = {
   0x141c,
   0x141d,
   0x141e
-#endif
 };
 const uint16_t refrigerationErdCount = sizeof(refrigerationErds) / sizeof(refrigerationErds[0]);
 
