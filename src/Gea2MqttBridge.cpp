@@ -12,11 +12,13 @@ extern "C" {
 #include "tiny_utils.h"
 }
 
+#include <Preferences.h>
 #include <set>
 
 #include "ErdLists.h"
 
 using namespace std;
+typedef Gea2MqttBridge_t self_t;
 
 enum {
   retry_delay = 2000,
@@ -31,7 +33,29 @@ enum {
   signal_write_requested
 };
 
-typedef Gea2MqttBridge_t self_t;
+static Preferences nvStorage;
+#define RW_MODE false
+#define RO_MODE true
+
+static bool valid_nv_data_loaded(self_t* self)
+{
+  nvStorage.begin("storage", RO_MODE);
+  self->pollingListCount = nvStorage.getUInt("polledErdCount", 0);
+  if(self->pollingListCount > 0) {
+    nvStorage.getBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+  }
+  nvStorage.end();
+
+  return (self->pollingListCount > 0);
+}
+
+static void save_polling_list_to_nv_data(self_t* self)
+{
+  nvStorage.begin("storage", RW_MODE);
+  nvStorage.putBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+  nvStorage.getUInt("polledErdCount", self->pollingListCount);
+  nvStorage.end();
+}
 
 static void arm_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
 {
@@ -260,6 +284,7 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
     case signal_timer_expired:
       Serial.print(".");
       if(!SendNextReadRequest(self)) {
+        save_polling_list_to_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
       }
       break;
@@ -268,6 +293,7 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
       disarm_timer(self);
       AddErdToPollingList(self, args->read_completed.erd);
       if(!SendNextReadRequest(self)) {
+        save_polling_list_to_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
       }
       break;
@@ -403,8 +429,14 @@ void gea2_mqtt_bridge_init(
     });
   tiny_event_subscribe(mqtt_client_on_mqtt_disconnect(mqtt_client), &self->mqtt_disconnect_subscription);
 
-  Serial.println("Start HSM");
-  tiny_hsm_init(&self->hsm, &hsm_configuration, state_identify_appliance);
+  if(valid_nv_data_loaded(self)) {
+    Serial.println("Start HSM with previously discovered appliance");
+    tiny_hsm_init(&self->hsm, &hsm_configuration, state_polling);
+  }
+  else {
+    Serial.println("Start HSM and identify new appliance");
+    tiny_hsm_init(&self->hsm, &hsm_configuration, state_identify_appliance);
+  }
 
   Serial.println("Bridge init done");
 }
