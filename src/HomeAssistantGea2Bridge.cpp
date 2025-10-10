@@ -49,7 +49,7 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
     receive_buffer,
     sizeof(receive_buffer),
     false,
-    3);
+    1);
 
   Serial.println("GEA2 erd client startup");
   tiny_gea2_erd_client_init(

@@ -42,10 +42,10 @@ static bool valid_nv_data_loaded(self_t* self)
   self->pollingListCount = 0;
   if(nvStorage.begin("storage", RO_MODE)) {
     Serial.println("NV storage found and opened");
-    self->pollingListCount = nvStorage.getUInt("polledErdCount", 0);
+    self->pollingListCount = nvStorage.getUInt("erdCount", 0);
     Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
     if(self->pollingListCount > 0) {
-      size_t bytesRead = nvStorage.getBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+      size_t bytesRead = nvStorage.getBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
       Serial.println("Loaded " + String(bytesRead) + " bytes from store");
     }
     nvStorage.end();
@@ -58,11 +58,31 @@ static void save_polling_list_to_nv_data(self_t* self)
 {
   if(nvStorage.begin("storage", RW_MODE)) {
     Serial.println("NV storage found and opened for write");
-    size_t bytesWritten = nvStorage.getBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+    if(nvStorage.clear()) {
+      Serial.println("NV storage cleared");
+    }
+    else {
+      Serial.println("NV storage not cleared");
+    }
+    size_t freeEntries = nvStorage.freeEntries();
+    Serial.println("Initial free entries = " + String(freeEntries));
+    size_t bytesWritten = nvStorage.putBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
     Serial.println("Wrote " + String(bytesWritten) + " bytes to store for list");
-    bytesWritten = nvStorage.getUInt("polledErdCount", self->pollingListCount);
+    bytesWritten = nvStorage.putUInt("erdCount", self->pollingListCount);
     Serial.println("Wrote " + String(bytesWritten) + " bytes to store for count");
     Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+    freeEntries = nvStorage.freeEntries();
+    Serial.println("Final free entries = " + String(freeEntries));
+    nvStorage.end();
+  }
+}
+
+static void check_nv_data(self_t* self)
+{
+  if(nvStorage.begin("storage", RO_MODE)) {
+    Serial.println("NV storage found and opened for read");
+    Serial.println("erdList isKey = " + String(nvStorage.isKey("erdList")));
+    Serial.println("erdCount isKey = " + String(nvStorage.isKey("erdCount")));
     nvStorage.end();
   }
 }
@@ -162,12 +182,12 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
 
 static bool SendNextReadRequest(self_t* self)
 {
-  char buffer[40];
+  // char buffer[40];
   self->erd_index++;
   bool more_erds_to_try = (self->erd_index < self->applianceErdListCount);
   if(more_erds_to_try) {
-    sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
-    Serial.print(buffer);
+    // sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
+    // Serial.print(buffer);
     self->request_id++;
     tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
     arm_timer(self, retry_delay);
@@ -192,7 +212,7 @@ static void AddErdToPollingList(self_t* self, tiny_erd_t erd)
 
 static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  char buffer[40];
+  // char buffer[40];
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
 
@@ -203,14 +223,13 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
       Serial.println("Starting looking for " + String(self->applianceErdListCount) + " common erds");
       self->erd_index = 0;
       self->pollingListCount = 0;
-      sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
-      Serial.print(buffer);
+      // sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
+      // Serial.print(buffer);
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
       arm_timer(self, retry_delay);
       break;
 
     case signal_timer_expired:
-      Serial.print(".");
       if(!SendNextReadRequest(self)) {
         tiny_hsm_transition(hsm, state_add_energy_erds);
       }
@@ -218,6 +237,7 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
     case signal_read_completed:
       disarm_timer(self);
+      Serial.print(".");
       AddErdToPollingList(self, args->read_completed.erd);
       if(!SendNextReadRequest(self)) {
         tiny_hsm_transition(hsm, state_add_energy_erds);
@@ -233,25 +253,25 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
 static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  char buffer[40];
+  // char buffer[40];
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   switch(signal) {
     case tiny_hsm_signal_entry:
       self->applianceErdList = energyErds;
       self->applianceErdListCount = energyErdCount;
+      Serial.println();
       Serial.println("Starting looking for " + String(self->applianceErdListCount) + " energy erds");
       self->erd_index = 0;
 
-      sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
-      Serial.print(buffer);
+      // sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
+      // Serial.print(buffer);
 
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
       arm_timer(self, retry_delay);
       break;
 
     case signal_timer_expired:
-      Serial.print(".");
       if(!SendNextReadRequest(self)) {
         tiny_hsm_transition(hsm, state_add_appliance_erds);
       }
@@ -259,6 +279,7 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
     case signal_read_completed:
       disarm_timer(self);
+      Serial.print(".");
       AddErdToPollingList(self, args->read_completed.erd);
       if(!SendNextReadRequest(self)) {
         tiny_hsm_transition(hsm, state_add_appliance_erds);
@@ -274,36 +295,39 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
 static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  char buffer[40];
+  // char buffer[40];
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   switch(signal) {
     case tiny_hsm_signal_entry:
       self->applianceErdList = applianceTypeToErdGroupTranslation[self->appliance_type].erdList;
       self->applianceErdListCount = applianceTypeToErdGroupTranslation[self->appliance_type].erdCount;
+      Serial.println();
       Serial.println("Starting looking for " + String(self->applianceErdListCount) + " appliance erds");
       self->erd_index = 0;
 
-      sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
-      Serial.print(buffer);
+      // sprintf(buffer, "Start read erd %04X\n", self->applianceErdList[self->erd_index]);
+      // Serial.print(buffer);
 
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
       arm_timer(self, retry_delay);
       break;
 
     case signal_timer_expired:
-      Serial.print(".");
       if(!SendNextReadRequest(self)) {
         save_polling_list_to_nv_data(self);
+        check_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
       }
       break;
 
     case signal_read_completed:
       disarm_timer(self);
+      Serial.print(".");
       AddErdToPollingList(self, args->read_completed.erd);
       if(!SendNextReadRequest(self)) {
         save_polling_list_to_nv_data(self);
+        check_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
       }
       break;
@@ -317,13 +341,13 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
 
 static void SendNextPollReadRequest(self_t* self)
 {
-  char buffer[40];
+  // char buffer[40];
   self->erd_index++;
   if(self->erd_index >= self->pollingListCount) {
     self->erd_index = 0;
   }
-  sprintf(buffer, "Poll erd %04X\n", self->erd_polling_list[self->erd_index]);
-  Serial.print(buffer);
+  // sprintf(buffer, "Poll erd %04X\n", self->erd_polling_list[self->erd_index]);
+  // Serial.print(buffer);
   self->request_id++;
   tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->erd_polling_list[self->erd_index]);
   arm_timer(self, retry_delay);
@@ -331,14 +355,15 @@ static void SendNextPollReadRequest(self_t* self)
 
 static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  char buffer[40];
+  // char buffer[40];
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
-  (void)self;
-  (void)args;
 
   switch(signal) {
     case tiny_hsm_signal_entry:
+      Serial.println("Polling " + String(self->pollingListCount) + " erds");
+      __attribute__((fallthrough));
+
     case signal_timer_expired:
       SendNextPollReadRequest(self);
       break;
@@ -352,14 +377,21 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
         args->read_completed.data,
         args->read_completed.data_size);
 
-      sprintf(buffer, "Poll read erd %04X\n", args->read_completed.erd);
-      Serial.print(buffer);
+      // sprintf(buffer, "Poll read erd %04X\n", args->read_completed.erd);
+      // Serial.print(buffer);
 
       SendNextPollReadRequest(self);
       break;
 
     case signal_mqtt_disconnected:
-      tiny_hsm_transition(hsm, state_identify_appliance);
+      if(valid_nv_data_loaded(self)) {
+        Serial.println("Start HSM with previously discovered appliance");
+        tiny_hsm_transition(&self->hsm, state_polling);
+      }
+      else {
+        Serial.println("Start HSM and identify new appliance");
+        tiny_hsm_transition(&self->hsm, state_identify_appliance);
+      }
       break;
 
     case tiny_hsm_signal_exit:
@@ -439,6 +471,7 @@ void gea2_mqtt_bridge_init(
     });
   tiny_event_subscribe(mqtt_client_on_mqtt_disconnect(mqtt_client), &self->mqtt_disconnect_subscription);
 
+  check_nv_data(self);
   if(valid_nv_data_loaded(self)) {
     Serial.println("Start HSM with previously discovered appliance");
     tiny_hsm_init(&self->hsm, &hsm_configuration, state_polling);
