@@ -39,46 +39,56 @@ static Preferences nvStorage;
 
 static bool valid_nv_data_loaded(self_t* self)
 {
-  nvStorage.begin("storage", RO_MODE);
-  self->pollingListCount = nvStorage.getUInt("polledErdCount", 0);
-  if(self->pollingListCount > 0) {
-    nvStorage.getBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+  self->pollingListCount = 0;
+  if(nvStorage.begin("storage", RO_MODE)) {
+    Serial.println("NV storage found and opened");
+    self->pollingListCount = nvStorage.getUInt("polledErdCount", 0);
+    Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+    if(self->pollingListCount > 0) {
+      size_t bytesRead = nvStorage.getBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+      Serial.println("Loaded " + String(bytesRead) + " bytes from store");
+    }
+    nvStorage.end();
   }
-  nvStorage.end();
 
   return (self->pollingListCount > 0);
 }
 
 static void save_polling_list_to_nv_data(self_t* self)
 {
-  nvStorage.begin("storage", RW_MODE);
-  nvStorage.putBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
-  nvStorage.getUInt("polledErdCount", self->pollingListCount);
-  nvStorage.end();
+  if(nvStorage.begin("storage", RW_MODE)) {
+    Serial.println("NV storage found and opened for write");
+    size_t bytesWritten = nvStorage.getBytes("polledErdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+    Serial.println("Wrote " + String(bytesWritten) + " bytes to store for list");
+    bytesWritten = nvStorage.getUInt("polledErdCount", self->pollingListCount);
+    Serial.println("Wrote " + String(bytesWritten) + " bytes to store for count");
+    Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+    nvStorage.end();
+  }
 }
 
-static void arm_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
+static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
 {
   tiny_timer_start(
     self->timer_group, &self->timer, ticks, self, +[](void* context) {
-      tiny_hsm_send_signal(&reinterpret_cast<Gea2MqttBridge_t*>(context)->hsm, signal_timer_expired, nullptr);
+      tiny_hsm_send_signal(&reinterpret_cast<self_t*>(context)->hsm, signal_timer_expired, nullptr);
     });
 }
 
-// static void arm_periodic_timer(Gea2MqttBridge_t* self, tiny_timer_ticks_t ticks)
+// static void arm_periodic_timer(self_t* self, tiny_timer_ticks_t ticks)
 //{
 //   tiny_timer_start_periodic(
 //     self->timer_group, &self->timer, ticks, self, +[](void* context) {
-//       tiny_hsm_send_signal(&reinterpret_cast<Gea2MqttBridge_t*>(context)->hsm, signal_timer_expired, nullptr);
+//       tiny_hsm_send_signal(&reinterpret_cast<self_t*>(context)->hsm, signal_timer_expired, nullptr);
 //     });
 // }
 
-static void disarm_timer(Gea2MqttBridge_t* self)
+static void disarm_timer(self_t* self)
 {
   tiny_timer_stop(self->timer_group, &self->timer);
 }
 
-static set<tiny_erd_t>& erd_set(Gea2MqttBridge_t* self)
+static set<tiny_erd_t>& erd_set(self_t* self)
 {
   return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
 }
@@ -92,7 +102,7 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
 
 static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  self_t* self = container_of(self_t, hsm, hsm);
   (void)data;
 
   switch(signal) {
@@ -110,7 +120,7 @@ static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, co
 
 static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
-  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
 
   switch(signal) {
@@ -150,7 +160,7 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
   return tiny_hsm_result_signal_consumed;
 }
 
-static bool SendNextReadRequest(Gea2MqttBridge_t* self)
+static bool SendNextReadRequest(self_t* self)
 {
   char buffer[40];
   self->erd_index++;
@@ -165,7 +175,7 @@ static bool SendNextReadRequest(Gea2MqttBridge_t* self)
   return more_erds_to_try;
 }
 
-static void AddErdToPollingList(Gea2MqttBridge_t* self, tiny_erd_t erd)
+static void AddErdToPollingList(self_t* self, tiny_erd_t erd)
 {
   char buffer[40];
 
@@ -183,7 +193,7 @@ static void AddErdToPollingList(Gea2MqttBridge_t* self, tiny_erd_t erd)
 static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   char buffer[40];
-  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
 
   switch(signal) {
@@ -224,7 +234,7 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   char buffer[40];
-  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   switch(signal) {
     case tiny_hsm_signal_entry:
@@ -265,7 +275,7 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   char buffer[40];
-  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   switch(signal) {
     case tiny_hsm_signal_entry:
@@ -305,7 +315,7 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
   return tiny_hsm_result_signal_consumed;
 }
 
-static void SendNextPollReadRequest(Gea2MqttBridge_t* self)
+static void SendNextPollReadRequest(self_t* self)
 {
   char buffer[40];
   self->erd_index++;
@@ -322,7 +332,7 @@ static void SendNextPollReadRequest(Gea2MqttBridge_t* self)
 static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   char buffer[40];
-  Gea2MqttBridge_t* self = container_of(Gea2MqttBridge_t, hsm, hsm);
+  self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   (void)self;
   (void)args;
@@ -390,7 +400,7 @@ void gea2_mqtt_bridge_init(
 
   tiny_event_subscription_init(
     &self->erd_client_activity_subscription, self, +[](void* context, const void* _args) {
-      auto self = reinterpret_cast<Gea2MqttBridge_t*>(context);
+      auto self = reinterpret_cast<self_t*>(context);
       auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(_args);
 
       switch(args->type) {
@@ -415,7 +425,7 @@ void gea2_mqtt_bridge_init(
 
   tiny_event_subscription_init(
     &self->mqtt_write_request_subscription, self, +[](void* context, const void* _args) {
-      auto self = reinterpret_cast<Gea2MqttBridge_t*>(context);
+      auto self = reinterpret_cast<self_t*>(context);
       auto args = reinterpret_cast<const mqtt_client_on_write_request_args_t*>(_args);
       tiny_hsm_send_signal(&self->hsm, signal_write_requested, args);
     });
@@ -423,7 +433,7 @@ void gea2_mqtt_bridge_init(
 
   tiny_event_subscription_init(
     &self->mqtt_disconnect_subscription, self, +[](void* context, const void*) {
-      auto self = reinterpret_cast<Gea2MqttBridge_t*>(context);
+      auto self = reinterpret_cast<self_t*>(context);
       reinterpret_cast<set<tiny_erd_t>*>(self->erd_set)->clear();
       tiny_hsm_send_signal(&self->hsm, signal_mqtt_disconnected, nullptr);
     });
