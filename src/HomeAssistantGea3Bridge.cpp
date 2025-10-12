@@ -4,20 +4,20 @@
  */
 
 #include <Arduino.h>
-#include "HomeAssistantGea2Bridge.h"
+#include "HomeAssistantGea3Bridge.h"
 
 extern "C" {
 #include "tiny_time_source.h"
 }
 
-static const tiny_gea2_erd_client_configuration_t client_configuration = {
+static const tiny_gea3_erd_client_configuration_t client_configuration = {
   .request_timeout = 250,
   .request_retries = 10
 };
 
-void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, const char* deviceId, uint8_t clientAddress)
+void HomeAssistantGea3Bridge::begin(PubSubClient& pubSubClient, Stream& uart, const char* deviceId, uint8_t clientAddress)
 {
-  Serial.println("GEA2 bridge startup");
+  Serial.println("GEA3 bridge startup");
   this->pubSubClient = &pubSubClient;
 
   Serial.println("Timer group startup");
@@ -37,46 +37,43 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
       tiny_event_publish(msecInterrupt, nullptr);
     });
 
-  Serial.println("GEA2 interface startup");
-  tiny_gea2_interface_init(
-    &gea2_interface,
+  Serial.println("GEA3 interface startup");
+  tiny_gea3_interface_init(
+    &gea3_interface,
     &uart_adapter.interface,
-    tiny_time_source_init(),
-    &fakeMsecInterrupt.interface,
     clientAddress,
     send_queue_buffer,
     sizeof(send_queue_buffer),
     receive_buffer,
     sizeof(receive_buffer),
-    false,
-    1);
+    false);
 
-  Serial.println("GEA2 erd client startup");
-  tiny_gea2_erd_client_init(
+  Serial.println("GEA3 erd client startup");
+  tiny_gea3_erd_client_init(
     &erd_client,
     &timer_group,
-    &gea2_interface.interface,
+    &gea3_interface.interface,
     client_queue_buffer,
     sizeof(client_queue_buffer),
     &client_configuration);
 
   Serial.println("MQTT bridge init");
-  gea2_mqtt_bridge_init(
-    &gea2_mqtt_bridge,
+  gea3_mqtt_bridge_init(
+    &gea3_mqtt_bridge,
     &timer_group,
     &erd_client.interface,
     &client_adapter.interface);
-  Serial.println("GEA2 bridge started");
+  Serial.println("GEA3 bridge started");
 }
 
-void HomeAssistantGea2Bridge::loop()
+void HomeAssistantGea3Bridge::loop()
 {
   pubSubClient->loop();
   tiny_timer_group_run(&timer_group);
-  tiny_gea2_interface_run(&gea2_interface);
+  tiny_gea3_interface_run(&gea3_interface);
 }
 
-void HomeAssistantGea2Bridge::notifyMqttDisconnected()
+void HomeAssistantGea3Bridge::notifyMqttDisconnected()
 {
   mqtt_client_adapter_notify_mqtt_disconnected(&client_adapter);
 }

@@ -3,8 +3,8 @@
  * @brief
  */
 
-#ifndef HomeAssistantGea2Bridge_h
-#define HomeAssistantGea2Bridge_h
+#ifndef HomeAssistantGea3Bridge_h
+#define HomeAssistantGea3Bridge_h
 
 #include <PubSubClient.h>
 #include <cstdint>
@@ -12,15 +12,15 @@
 #include "tiny_uart_adapter.hpp"
 
 extern "C" {
-#include "Gea2MqttBridge.h"
-#include "tiny_gea2_erd_client.h"
-#include "tiny_gea2_interface.h"
+#include "Gea3MqttBridge.h"
+#include "tiny_gea3_erd_client.h"
+#include "tiny_gea3_interface.h"
 #include "tiny_timer.h"
 }
 
-class HomeAssistantGea2Bridge {
+class HomeAssistantGea3Bridge {
  public:
-  static constexpr unsigned long baud = 19200;
+  static constexpr unsigned long baud = 230400;
 
   void begin(PubSubClient& client, Stream& uart, const char* deviceId, uint8_t clientAddress = 0xE4);
   void loop();
@@ -37,17 +37,17 @@ class HomeAssistantGea2Bridge {
   tiny_uart_adapter_t uart_adapter;
   mqtt_client_adapter_t client_adapter;
 
-  tiny_gea2_interface_t gea2_interface;
+  tiny_gea3_interface_t gea3_interface;
   uint8_t receive_buffer[255];
   uint8_t send_queue_buffer[10000];
 
-  tiny_gea2_erd_client_t erd_client;
+  tiny_gea3_erd_client_t erd_client;
   uint8_t client_queue_buffer[8096];
-  tiny_gea2_erd_client_request_id_t requestId;
+  tiny_gea3_erd_client_request_id_t requestId;
 
   tiny_event_subscription_t activity;
 
-  Gea2MqttBridge_t gea2_mqtt_bridge;
+  Gea3MqttBridge_t gea3_mqtt_bridge;
 };
 
 #endif
