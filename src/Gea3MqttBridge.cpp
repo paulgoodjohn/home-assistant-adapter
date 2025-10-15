@@ -362,7 +362,7 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
       break;
 
     case signal_read_completed:
-      disarm_timer(self);
+      // disarm_timer(self);
       reset_lost_appliance_timer(self);
       mqtt_client_update_erd(
         self->mqtt_client,
@@ -370,7 +370,7 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
         args->read_completed.data,
         args->read_completed.data_size);
 
-      SendNextPollReadRequest(self);
+      // SendNextPollReadRequest(self);
       break;
 
     case signal_mqtt_disconnected:
