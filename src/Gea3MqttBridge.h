@@ -32,6 +32,7 @@ typedef struct {
   const tiny_erd_t* applianceErdList;
   uint16_t applianceErdListCount;
   uint16_t erd_index;
+  uint16_t polling_retries;
 } Gea3MqttBridge_t;
 
 /*!

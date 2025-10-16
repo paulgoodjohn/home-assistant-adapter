@@ -374,9 +374,13 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
       break;
 
     case signal_polling_timer_expired:
-      if(self->erd_index >= self->pollingListCount) {
+      if((self->erd_index >= self->pollingListCount) || (self->polling_retries >= 3)) {
         self->erd_index = 0;
+        self->polling_retries = 0;
         SendNextPollReadRequest(self);
+      }
+      else {
+        self->polling_retries++;
       }
       arm_polling_timer(self, polling_delay);
       break;
