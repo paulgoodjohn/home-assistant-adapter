@@ -21,7 +21,7 @@ using namespace std;
 typedef Gea3MqttBridge_t self_t;
 
 enum {
-  retry_delay = 2000,
+  retry_delay = 100,
   polling_delay = 10000,
   appliance_lost_timeout = 30000
 };
@@ -29,6 +29,7 @@ enum {
 enum {
   signal_start = tiny_hsm_signal_user_start,
   signal_timer_expired,
+  signal_polling_timer_expired,
   signal_read_failed,
   signal_read_completed,
   signal_mqtt_disconnected,
@@ -85,6 +86,15 @@ static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
   tiny_timer_start(
     self->timer_group, &self->timer, ticks, self, +[](void* context) {
       tiny_hsm_send_signal(&reinterpret_cast<self_t*>(context)->hsm, signal_timer_expired, nullptr);
+    });
+}
+
+static void arm_polling_timer(self_t* self, tiny_timer_ticks_t ticks)
+{
+  Serial.println("Started polling timer");
+  tiny_timer_start(
+    self->timer_group, &self->pollingTimer, ticks, self, +[](void* context) {
+      tiny_hsm_send_signal(&reinterpret_cast<self_t*>(context)->hsm, signal_polling_timer_expired, nullptr);
     });
 }
 
@@ -338,13 +348,13 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
 
 static void SendNextPollReadRequest(self_t* self)
 {
-  self->erd_index++;
-  if(self->erd_index >= self->pollingListCount) {
-    self->erd_index = 0;
+  if(self->erd_index < self->pollingListCount) {
+    Serial.println("Reading " + String(self->erd_polling_list[self->erd_index]) + " Erd");
+    self->request_id++;
+    tiny_gea3_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->erd_polling_list[self->erd_index]);
+    self->erd_index++;
+    arm_timer(self, retry_delay);
   }
-  self->request_id++;
-  tiny_gea3_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->erd_polling_list[self->erd_index]);
-  arm_timer(self, polling_delay);
 }
 
 static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
@@ -355,22 +365,33 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
   switch(signal) {
     case tiny_hsm_signal_entry:
       Serial.println("Polling " + String(self->pollingListCount) + " erds");
+      arm_polling_timer(self, polling_delay);
       __attribute__((fallthrough));
 
     case signal_timer_expired:
+      Serial.println("Reading " + String(self->erd_polling_list[self->erd_index - 1]) + " Erd failed");
       SendNextPollReadRequest(self);
       break;
 
+    case signal_polling_timer_expired:
+      if(self->erd_index >= self->pollingListCount) {
+        self->erd_index = 0;
+        SendNextPollReadRequest(self);
+      }
+      arm_polling_timer(self, polling_delay);
+      break;
+
     case signal_read_completed:
-      // disarm_timer(self);
+      disarm_timer(self);
       reset_lost_appliance_timer(self);
       mqtt_client_update_erd(
         self->mqtt_client,
         args->read_completed.erd,
         args->read_completed.data,
         args->read_completed.data_size);
+      Serial.println("Reading " + String(self->erd_polling_list[self->erd_index - 1]) + " Erd completed");
 
-      // SendNextPollReadRequest(self);
+      SendNextPollReadRequest(self);
       break;
 
     case signal_mqtt_disconnected:

@@ -20,6 +20,7 @@ typedef struct {
   i_mqtt_client_t* mqtt_client;
   tiny_timer_t timer;
   tiny_timer_t applianceLostTimer;
+  tiny_timer_t pollingTimer;
   tiny_event_subscription_t mqtt_write_request_subscription;
   tiny_event_subscription_t mqtt_disconnect_subscription;
   tiny_event_subscription_t erd_client_activity_subscription;
