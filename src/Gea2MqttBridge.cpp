@@ -101,9 +101,13 @@ static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
     });
 }
 
+static void DisarmLostApplianceTimer(self_t* self)
+{
+  tiny_timer_stop(self->timer_group, &self->applianceLostTimer);
+}
+
 static void ResetLostApplianceTimer(self_t* self)
 {
-  tiny_timer_stop(self->timer_group, &self->timer);
   tiny_timer_start(
     self->timer_group, &self->applianceLostTimer, appliance_lost_timeout, self, +[](void* context) {
       tiny_hsm_send_signal(&reinterpret_cast<self_t*>(context)->hsm, signal_appliance_lost, nullptr);
@@ -169,7 +173,7 @@ static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signa
     }
     case signal_read_completed: {
       DisarmRetryTimer(self);
-      ResetLostApplianceTimer(self);
+      DisarmLostApplianceTimer(self);
       if(args->read_completed.erd == 0x0008) {
         self->erd_host_address = args->address;
       }
@@ -195,7 +199,6 @@ static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signa
 
 static bool SendNextReadRequest(self_t* self)
 {
-  ResetLostApplianceTimer(self);
   self->erd_index++;
   bool more_erds_to_try = (self->erd_index < self->applianceErdListCount);
   if(more_erds_to_try) {
@@ -368,16 +371,19 @@ static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal
 
   switch(signal) {
     case tiny_hsm_signal_entry:
+      DisarmLostApplianceTimer(self);
       ResetLostApplianceTimer(self);
       Serial.println("Polling " + String(self->pollingListCount) + " erds");
       __attribute__((fallthrough));
 
     case signal_timer_expired:
       SendNextPollReadRequest(self);
+      Serial.println("Poll timeout");
       break;
 
     case signal_read_completed:
       DisarmRetryTimer(self);
+      DisarmLostApplianceTimer(self);
       ResetLostApplianceTimer(self);
       mqtt_client_update_erd(
         self->mqtt_client,
