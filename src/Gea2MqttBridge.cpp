@@ -39,7 +39,7 @@ static Preferences nvStorage;
 #define RW_MODE false
 #define RO_MODE true
 
-static bool valid_nv_data_loaded(self_t* self)
+static bool ValidPollingListLoaded(self_t* self)
 {
   self->pollingListCount = 0;
   if(nvStorage.begin("storage", RO_MODE)) {
@@ -56,7 +56,7 @@ static bool valid_nv_data_loaded(self_t* self)
   return (self->pollingListCount > 0);
 }
 
-static void save_polling_list_to_nv_data(self_t* self)
+static void SavePollingListToNVStore(self_t* self)
 {
   if(nvStorage.begin("storage", RW_MODE)) {
     Serial.println("NV storage found and opened for write");
@@ -79,6 +79,20 @@ static void save_polling_list_to_nv_data(self_t* self)
   }
 }
 
+static void ClearNVStorage(self_t* self)
+{
+  if(nvStorage.begin("storage", RW_MODE)) {
+    Serial.println("NV storage found and opened for write");
+    if(nvStorage.clear()) {
+      Serial.println("NV storage cleared");
+    }
+    else {
+      Serial.println("NV storage not cleared");
+    }
+    nvStorage.end();
+  }
+}
+
 static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
 {
   tiny_timer_start(
@@ -87,7 +101,7 @@ static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
     });
 }
 
-static void reset_lost_appliance_timer(self_t* self)
+static void ResetLostApplianceTimer(self_t* self)
 {
   tiny_timer_stop(self->timer_group, &self->timer);
   tiny_timer_start(
@@ -96,7 +110,7 @@ static void reset_lost_appliance_timer(self_t* self)
     });
 }
 
-static void disarm_timer(self_t* self)
+static void DisarmRetryTimer(self_t* self)
 {
   tiny_timer_stop(self->timer_group, &self->timer);
 }
@@ -106,14 +120,14 @@ static set<tiny_erd_t>& erd_set(self_t* self)
   return *reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
 }
 
-static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
-static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
-static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
-static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
-static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
-static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t State_Top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t State_AddCommonErds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t State_AddEnergyErds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t State_AddApplianceErds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
+static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data);
 
-static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t State_Top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   self_t* self = container_of(self_t, hsm, hsm);
   (void)data;
@@ -125,7 +139,8 @@ static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, co
     } break;
 
     case signal_appliance_lost: {
-      tiny_hsm_transition(hsm, state_identify_appliance);
+      ClearNVStorage(self);
+      tiny_hsm_transition(hsm, State_IdentifyAppliance);
     } break;
 
     default:
@@ -135,7 +150,7 @@ static tiny_hsm_result_t state_top(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, co
   return tiny_hsm_result_signal_consumed;
 }
 
-static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
@@ -153,8 +168,8 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
       break;
     }
     case signal_read_completed: {
-      disarm_timer(self);
-      reset_lost_appliance_timer(self);
+      DisarmRetryTimer(self);
+      ResetLostApplianceTimer(self);
       if(args->read_completed.erd == 0x0008) {
         self->erd_host_address = args->address;
       }
@@ -164,11 +179,11 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
       if(self->appliance_type >= maximumApplianceType) {
         self->appliance_type = 0;
       }
-      tiny_hsm_transition(hsm, state_add_common_erds);
+      tiny_hsm_transition(hsm, State_AddCommonErds);
       break;
     }
     case tiny_hsm_signal_exit: {
-      disarm_timer(self);
+      DisarmRetryTimer(self);
       break;
     }
     default:
@@ -180,7 +195,7 @@ static tiny_hsm_result_t state_identify_appliance(tiny_hsm_t* hsm, tiny_hsm_sign
 
 static bool SendNextReadRequest(self_t* self)
 {
-  reset_lost_appliance_timer(self);
+  ResetLostApplianceTimer(self);
   self->erd_index++;
   bool more_erds_to_try = (self->erd_index < self->applianceErdListCount);
   if(more_erds_to_try) {
@@ -205,7 +220,7 @@ static void AddErdToPollingList(self_t* self, tiny_erd_t erd)
   Serial.print(buffer);
 }
 
-static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t State_AddCommonErds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
@@ -223,12 +238,12 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
-        tiny_hsm_transition(hsm, state_add_energy_erds);
+        tiny_hsm_transition(hsm, State_AddEnergyErds);
       }
       break;
 
     case signal_read_completed:
-      disarm_timer(self);
+      DisarmRetryTimer(self);
       AddErdToPollingList(self, args->read_completed.erd);
       mqtt_client_update_erd(
         self->mqtt_client,
@@ -237,7 +252,7 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
         args->read_completed.data_size);
 
       if(!SendNextReadRequest(self)) {
-        tiny_hsm_transition(hsm, state_add_energy_erds);
+        tiny_hsm_transition(hsm, State_AddEnergyErds);
       }
       break;
 
@@ -248,7 +263,7 @@ static tiny_hsm_result_t state_add_common_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
   return tiny_hsm_result_signal_consumed;
 }
 
-static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t State_AddEnergyErds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
@@ -265,12 +280,12 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
-        tiny_hsm_transition(hsm, state_add_appliance_erds);
+        tiny_hsm_transition(hsm, State_AddApplianceErds);
       }
       break;
 
     case signal_read_completed:
-      disarm_timer(self);
+      DisarmRetryTimer(self);
       AddErdToPollingList(self, args->read_completed.erd);
       mqtt_client_update_erd(
         self->mqtt_client,
@@ -279,7 +294,7 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
         args->read_completed.data_size);
 
       if(!SendNextReadRequest(self)) {
-        tiny_hsm_transition(hsm, state_add_appliance_erds);
+        tiny_hsm_transition(hsm, State_AddApplianceErds);
       }
       break;
 
@@ -290,7 +305,7 @@ static tiny_hsm_result_t state_add_energy_erds(tiny_hsm_t* hsm, tiny_hsm_signal_
   return tiny_hsm_result_signal_consumed;
 }
 
-static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t State_AddApplianceErds(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
@@ -308,13 +323,13 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
-        save_polling_list_to_nv_data(self);
-        tiny_hsm_transition(hsm, state_polling);
+        SavePollingListToNVStore(self);
+        tiny_hsm_transition(hsm, State_PollErdsFromList);
       }
       break;
 
     case signal_read_completed:
-      disarm_timer(self);
+      DisarmRetryTimer(self);
       AddErdToPollingList(self, args->read_completed.erd);
       mqtt_client_update_erd(
         self->mqtt_client,
@@ -323,8 +338,8 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
         args->read_completed.data_size);
 
       if(!SendNextReadRequest(self)) {
-        save_polling_list_to_nv_data(self);
-        tiny_hsm_transition(hsm, state_polling);
+        SavePollingListToNVStore(self);
+        tiny_hsm_transition(hsm, State_PollErdsFromList);
       }
       break;
 
@@ -346,13 +361,14 @@ static void SendNextPollReadRequest(self_t* self)
   arm_timer(self, retry_delay);
 }
 
-static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
+static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
 {
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
 
   switch(signal) {
     case tiny_hsm_signal_entry:
+      ResetLostApplianceTimer(self);
       Serial.println("Polling " + String(self->pollingListCount) + " erds");
       __attribute__((fallthrough));
 
@@ -361,8 +377,8 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
       break;
 
     case signal_read_completed:
-      disarm_timer(self);
-      reset_lost_appliance_timer(self);
+      DisarmRetryTimer(self);
+      ResetLostApplianceTimer(self);
       mqtt_client_update_erd(
         self->mqtt_client,
         args->read_completed.erd,
@@ -373,18 +389,18 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
       break;
 
     case signal_mqtt_disconnected:
-      if(valid_nv_data_loaded(self)) {
+      if(ValidPollingListLoaded(self)) {
         Serial.println("Start HSM with previously discovered appliance");
-        tiny_hsm_transition(&self->hsm, state_polling);
+        tiny_hsm_transition(&self->hsm, State_PollErdsFromList);
       }
       else {
         Serial.println("Start HSM and identify new appliance");
-        tiny_hsm_transition(&self->hsm, state_identify_appliance);
+        tiny_hsm_transition(&self->hsm, State_IdentifyAppliance);
       }
       break;
 
     case tiny_hsm_signal_exit:
-      disarm_timer(self);
+      DisarmRetryTimer(self);
       break;
 
     default:
@@ -395,12 +411,12 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
 }
 
 static const tiny_hsm_state_descriptor_t hsm_state_descriptors[] = {
-  { .state = state_top, .parent = nullptr },
-  { .state = state_identify_appliance, .parent = state_top },
-  { .state = state_add_common_erds, .parent = state_top },
-  { .state = state_add_energy_erds, .parent = state_top },
-  { .state = state_add_appliance_erds, .parent = state_top },
-  { .state = state_polling, .parent = state_top }
+  { .state = State_Top, .parent = nullptr },
+  { .state = State_IdentifyAppliance, .parent = State_Top },
+  { .state = State_AddCommonErds, .parent = State_Top },
+  { .state = State_AddEnergyErds, .parent = State_Top },
+  { .state = State_AddApplianceErds, .parent = State_Top },
+  { .state = State_PollErdsFromList, .parent = State_Top }
 };
 static const tiny_hsm_configuration_t hsm_configuration = {
   .states = hsm_state_descriptors,
@@ -460,13 +476,13 @@ void gea2_mqtt_bridge_init(
     });
   tiny_event_subscribe(mqtt_client_on_mqtt_disconnect(mqtt_client), &self->mqtt_disconnect_subscription);
 
-  if(valid_nv_data_loaded(self)) {
+  if(ValidPollingListLoaded(self)) {
     Serial.println("Start HSM with previously discovered appliance");
-    tiny_hsm_init(&self->hsm, &hsm_configuration, state_polling);
+    tiny_hsm_init(&self->hsm, &hsm_configuration, State_PollErdsFromList);
   }
   else {
     Serial.println("Start HSM and identify new appliance");
-    tiny_hsm_init(&self->hsm, &hsm_configuration, state_identify_appliance);
+    tiny_hsm_init(&self->hsm, &hsm_configuration, State_IdentifyAppliance);
   }
 
   Serial.println("Bridge init done");
