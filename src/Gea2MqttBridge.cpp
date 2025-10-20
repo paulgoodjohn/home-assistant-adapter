@@ -21,8 +21,8 @@ using namespace std;
 typedef Gea2MqttBridge_t self_t;
 
 enum {
-  retry_delay = 2000,
-  appliance_lost_timeout = 30000
+  retry_delay = 3000,
+  appliance_lost_timeout = 60000
 };
 
 enum {
@@ -41,23 +41,29 @@ static Preferences nvStorage;
 
 static bool ValidPollingListLoaded(self_t* self)
 {
+  char buffer[80];
   self->pollingListCount = 0;
   if(nvStorage.begin("storage", RO_MODE)) {
     Serial.println("NV storage found and opened");
     self->pollingListCount = nvStorage.getUInt("erdCount", 0);
-    Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+    sprintf(buffer, "Stored number of polled ERDs is %d\n", self->pollingListCount);
+    Serial.print(buffer);
     if(self->pollingListCount > 0) {
       size_t bytesRead = nvStorage.getBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
-      Serial.println("Loaded " + String(bytesRead) + " bytes from store");
+      sprintf(buffer, "Loaded %d bytes into polling list\n", bytesRead);
+      Serial.print(buffer);
+      self->erd_host_address = nvStorage.getUChar("erdAddress", 0xFF);
+      sprintf(buffer, "GEA address set to 0x%02X\n", self->erd_host_address);
+      Serial.print(buffer);
     }
     nvStorage.end();
   }
-
   return (self->pollingListCount > 0);
 }
 
 static void SavePollingListToNVStore(self_t* self)
 {
+  char buffer[80];
   if(nvStorage.begin("storage", RW_MODE)) {
     Serial.println("NV storage found and opened for write");
     if(nvStorage.clear()) {
@@ -67,14 +73,20 @@ static void SavePollingListToNVStore(self_t* self)
       Serial.println("NV storage not cleared");
     }
     size_t freeEntries = nvStorage.freeEntries();
-    Serial.println("Initial free entries = " + String(freeEntries));
+    sprintf(buffer, "Initial free entries = %d\n", freeEntries);
+    Serial.print(buffer);
     size_t bytesWritten = nvStorage.putBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
-    Serial.println("Wrote " + String(bytesWritten) + " bytes to store for list");
+    sprintf(buffer, "Wrote %d bytes to store list\n", bytesWritten);
+    Serial.print(buffer);
     bytesWritten = nvStorage.putUInt("erdCount", self->pollingListCount);
-    Serial.println("Wrote " + String(bytesWritten) + " bytes to store for count");
-    Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+    sprintf(buffer, "Wrote %d bytes to store erd count of %d\n", bytesWritten, self->pollingListCount);
+    Serial.print(buffer);
+    bytesWritten = nvStorage.putUChar("erdAddress", self->erd_host_address);
+    sprintf(buffer, "Wrote %d bytes to store GEA address of 0x%02X\n", bytesWritten, self->erd_host_address);
+    Serial.print(buffer);
     freeEntries = nvStorage.freeEntries();
-    Serial.println("Final free entries = " + String(freeEntries));
+    sprintf(buffer, "Final free entries = %d\n", freeEntries);
+    Serial.print(buffer);
     nvStorage.end();
   }
 }
@@ -158,6 +170,7 @@ static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signa
 {
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
+  char buffer[80];
 
   switch(signal) {
     case tiny_hsm_signal_entry: {
@@ -166,7 +179,8 @@ static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signa
       __attribute__((fallthrough));
 
     case signal_timer_expired: {
-      Serial.println("Asking for appliance type ERD 0x0008");
+      sprintf(buffer, "Asking for appliance type ERD 0x0008 from address 0x%02X\n", self->erd_host_address);
+      Serial.print(buffer);
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, 0x0008);
       arm_timer(self, retry_delay);
       break;
@@ -176,6 +190,8 @@ static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signa
       DisarmLostApplianceTimer(self);
       if(args->read_completed.erd == 0x0008) {
         self->erd_host_address = args->address;
+        sprintf(buffer, "Using GEA address 0x%02X\n", self->erd_host_address);
+        Serial.print(buffer);
       }
 
       const uint8_t* applianceTypeResponse = (const uint8_t*)args->read_completed.data;
@@ -326,7 +342,6 @@ static tiny_hsm_result_t State_AddApplianceErds(tiny_hsm_t* hsm, tiny_hsm_signal
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
-        SavePollingListToNVStore(self);
         tiny_hsm_transition(hsm, State_PollErdsFromList);
       }
       break;
@@ -341,7 +356,6 @@ static tiny_hsm_result_t State_AddApplianceErds(tiny_hsm_t* hsm, tiny_hsm_signal
         args->read_completed.data_size);
 
       if(!SendNextReadRequest(self)) {
-        SavePollingListToNVStore(self);
         tiny_hsm_transition(hsm, State_PollErdsFromList);
       }
       break;
@@ -362,9 +376,7 @@ static void SendNextPollReadRequest(self_t* self)
   self->request_id++;
   tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->erd_polling_list[self->erd_index]);
   arm_timer(self, retry_delay);
-  char buffer[40];
-  sprintf(buffer, "Polling #%d ERD %04X\n", self->erd_index, self->erd_polling_list[self->erd_index]);
-  Serial.print(buffer);
+  Serial.print(".");
 }
 
 static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
@@ -376,13 +388,12 @@ static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal
     case tiny_hsm_signal_entry:
       DisarmLostApplianceTimer(self);
       ResetLostApplianceTimer(self);
+      SavePollingListToNVStore(self);
       Serial.println("Polling " + String(self->pollingListCount) + " erds");
       __attribute__((fallthrough));
 
     case signal_timer_expired: {
-      char buffer[40];
-      sprintf(buffer, "Poll timeout for #%d ERD %04X\n", self->erd_index, self->erd_polling_list[self->erd_index]);
-      Serial.print(buffer);
+      Serial.print("X");
       SendNextPollReadRequest(self);
     } break;
 
