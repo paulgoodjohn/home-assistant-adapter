@@ -362,6 +362,9 @@ static void SendNextPollReadRequest(self_t* self)
   self->request_id++;
   tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->erd_polling_list[self->erd_index]);
   arm_timer(self, retry_delay);
+  char buffer[40];
+  sprintf(buffer, "Polling #%d ERD %04X\n", self->erd_index, self->erd_polling_list[self->erd_index]);
+  Serial.print(buffer);
 }
 
 static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal_t signal, const void* data)
@@ -376,10 +379,12 @@ static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal
       Serial.println("Polling " + String(self->pollingListCount) + " erds");
       __attribute__((fallthrough));
 
-    case signal_timer_expired:
+    case signal_timer_expired: {
+      char buffer[40];
+      sprintf(buffer, "Poll timeout for #%d ERD %04X\n", self->erd_index, self->erd_polling_list[self->erd_index]);
+      Serial.print(buffer);
       SendNextPollReadRequest(self);
-      Serial.println("Poll timeout");
-      break;
+    } break;
 
     case signal_read_completed:
       DisarmRetryTimer(self);
