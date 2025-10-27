@@ -3,12 +3,10 @@
  * @brief Erd lists for various appliances
  */
 
-#ifndef Erdlists_h
-#define Erdlists_h
-
+#include "ApplianceErds.h"
 #include "tiny_erd.h"
 
-const tiny_erd_t commonErds[] = {
+static const tiny_erd_t commonErds[] = {
   0x0001,
   0x0002,
   0x0004,
@@ -40,9 +38,9 @@ const tiny_erd_t commonErds[] = {
   0x0051,
   0x0052
 };
-const uint16_t commonErdCount = sizeof(commonErds) / sizeof(commonErds[0]);
+static const uint16_t commonErdCount = sizeof(commonErds) / sizeof(commonErds[0]);
 
-const tiny_erd_t refrigerationErds[] = {
+static const tiny_erd_t refrigerationErds[] = {
   0x1000,
   0x1001,
   0x1003,
@@ -531,9 +529,9 @@ const tiny_erd_t refrigerationErds[] = {
   0x141d,
   0x141e
 };
-const uint16_t refrigerationErdCount = sizeof(refrigerationErds) / sizeof(refrigerationErds[0]);
+static const uint16_t refrigerationErdCount = sizeof(refrigerationErds) / sizeof(refrigerationErds[0]);
 
-const tiny_erd_t laundryErds[] = {
+static const tiny_erd_t laundryErds[] = {
   0x2000,
   0x2001,
   0x2002,
@@ -961,9 +959,9 @@ const tiny_erd_t laundryErds[] = {
   0x2f1a,
   0x2f1b
 };
-const uint16_t laundryErdCount = sizeof(laundryErds) / sizeof(laundryErds[0]);
+static const uint16_t laundryErdCount = sizeof(laundryErds) / sizeof(laundryErds[0]);
 
-const tiny_erd_t dishWasherErds[] = {
+static const tiny_erd_t dishWasherErds[] = {
   0x3000,
   0x3001,
   0x3003,
@@ -1106,9 +1104,9 @@ const tiny_erd_t dishWasherErds[] = {
   0x361c,
   0x361d
 };
-const uint16_t dishWasherErdCount = sizeof(dishWasherErds) / sizeof(dishWasherErds[0]);
+static const uint16_t dishWasherErdCount = sizeof(dishWasherErds) / sizeof(dishWasherErds[0]);
 
-const tiny_erd_t waterHeaterErds[] = {
+static const tiny_erd_t waterHeaterErds[] = {
   0x4008,
   0x4009,
   0x400a,
@@ -1174,9 +1172,9 @@ const tiny_erd_t waterHeaterErds[] = {
   0x4225,
   0x4226
 };
-const uint16_t waterHeaterErdCount = sizeof(waterHeaterErds) / sizeof(waterHeaterErds[0]);
+static const uint16_t waterHeaterErdCount = sizeof(waterHeaterErds) / sizeof(waterHeaterErds[0]);
 
-const tiny_erd_t rangeErds[] = {
+static const tiny_erd_t rangeErds[] = {
   0x5000,
   0x5001,
   0x5003,
@@ -1683,9 +1681,9 @@ const tiny_erd_t rangeErds[] = {
   0x5c40,
   0x5c41
 };
-const uint16_t rangeErdCount = sizeof(rangeErds) / sizeof(rangeErds[0]);
+static const uint16_t rangeErdCount = sizeof(rangeErds) / sizeof(rangeErds[0]);
 
-const tiny_erd_t airConditioningErds[] = {
+static const tiny_erd_t airConditioningErds[] = {
   0x7000,
   0x7001,
   0x7002,
@@ -1990,9 +1988,9 @@ const tiny_erd_t airConditioningErds[] = {
   0x7b0e,
   0x7b0f
 };
-const uint16_t airConditioningErdCount = sizeof(airConditioningErds) / sizeof(airConditioningErds[0]);
+static const uint16_t airConditioningErdCount = sizeof(airConditioningErds) / sizeof(airConditioningErds[0]);
 
-const tiny_erd_t waterFilterErds[] = {
+static const tiny_erd_t waterFilterErds[] = {
   0x8000,
   0x8001,
   0x8002,
@@ -2048,9 +2046,9 @@ const tiny_erd_t waterFilterErds[] = {
   0x8034,
   0x8035,
 };
-const uint16_t waterFilterErdCount = sizeof(waterFilterErds) / sizeof(waterFilterErds[0]);
+static const uint16_t waterFilterErdCount = sizeof(waterFilterErds) / sizeof(waterFilterErds[0]);
 
-const tiny_erd_t smallApplianceErds[] = {
+static const tiny_erd_t smallApplianceErds[] = {
   0x9000,
   0x9001,
   0x9002,
@@ -2390,14 +2388,23 @@ const tiny_erd_t energyErds[] = {
   0xd205,
   0xd207
 };
-const uint16_t energyErdCount = sizeof(energyErds) / sizeof(energyErds[0]);
+static const uint16_t energyErdCount = sizeof(energyErds) / sizeof(energyErds[0]);
 
-typedef struct {
-  const tiny_erd_t* erdList;
-  uint16_t erdCount;
-} applianceTypeToErdListAndCount_t;
+static const tiny_erd_list_t commonErdList = { commonErds, commonErdCount };
 
-const applianceTypeToErdListAndCount_t applianceTypeToErdGroupTranslation[] = {
+const tiny_erd_list_t* GetCommonErdList(void)
+{
+  return &commonErdList;
+};
+
+static const tiny_erd_list_t energyErdList = { energyErds, energyErdCount };
+
+const tiny_erd_list_t* GetEnergyErdList(void)
+{
+  return &energyErdList;
+};
+
+static const tiny_erd_list_t applianceTypeToErdGroupTranslation[] = {
   { waterHeaterErds, waterHeaterErdCount }, // 0x00 = Water heater
   { laundryErds, laundryErdCount }, // 0x01 = Clothes washer
   { laundryErds, laundryErdCount }, // 0x02 = Clothes dryer
@@ -2454,5 +2461,12 @@ const applianceTypeToErdListAndCount_t applianceTypeToErdGroupTranslation[] = {
   { rangeErds, rangeErdCount }, // 0x35 = Hearth Pizza Oven
   { smallApplianceErds, smallApplianceErdCount }, // 0x36 = Sourdough Starter
 };
-const uint16_t maximumApplianceType = sizeof(applianceTypeToErdGroupTranslation) / sizeof(applianceTypeToErdGroupTranslation[0]);
-#endif
+static const uint16_t maximumApplianceType = sizeof(applianceTypeToErdGroupTranslation) / sizeof(applianceTypeToErdGroupTranslation[0]);
+
+const tiny_erd_list_t* GetApplianceErdList(uint8_t applianceType)
+{
+  if(applianceType >= maximumApplianceType) {
+    applianceType = 0;
+  }
+  return &applianceTypeToErdGroupTranslation[applianceType];
+};
