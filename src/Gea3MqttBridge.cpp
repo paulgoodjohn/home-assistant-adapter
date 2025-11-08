@@ -12,7 +12,7 @@ extern "C" {
 #include "tiny_utils.h"
 }
 
-#include <Preferences.h>
+// #include <Preferences.h>
 #include <set>
 
 #include "ErdLists.h"
@@ -37,49 +37,49 @@ enum {
   signal_write_requested
 };
 
-static Preferences nvStorage;
-#define RW_MODE false
-#define RO_MODE true
+// static Preferences nvStorage;
+// #define RW_MODE false
+// #define RO_MODE true
 
-static bool valid_nv_data_loaded(self_t* self)
-{
-  self->pollingListCount = 0;
-  if(nvStorage.begin("storage", RO_MODE)) {
-    Serial.println("NV storage found and opened");
-    self->pollingListCount = nvStorage.getUInt("erdCount", 0);
-    Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
-    if(self->pollingListCount > 0) {
-      size_t bytesRead = nvStorage.getBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
-      Serial.println("Loaded " + String(bytesRead) + " bytes from store");
-    }
-    nvStorage.end();
-  }
+// static bool valid_nv_data_loaded(self_t* self)
+// {
+//   self->pollingListCount = 0;
+//   if(nvStorage.begin("storage", RO_MODE)) {
+//     Serial.println("NV storage found and opened");
+//     self->pollingListCount = nvStorage.getUInt("erdCount", 0);
+//     Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+//     if(self->pollingListCount > 0) {
+//       size_t bytesRead = nvStorage.getBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+//       Serial.println("Loaded " + String(bytesRead) + " bytes from store");
+//     }
+//     nvStorage.end();
+//   }
 
-  return (self->pollingListCount > 0);
-}
+//   return (self->pollingListCount > 0);
+// }
 
-static void save_polling_list_to_nv_data(self_t* self)
-{
-  if(nvStorage.begin("storage", RW_MODE)) {
-    Serial.println("NV storage found and opened for write");
-    if(nvStorage.clear()) {
-      Serial.println("NV storage cleared");
-    }
-    else {
-      Serial.println("NV storage not cleared");
-    }
-    size_t freeEntries = nvStorage.freeEntries();
-    Serial.println("Initial free entries = " + String(freeEntries));
-    size_t bytesWritten = nvStorage.putBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
-    Serial.println("Wrote " + String(bytesWritten) + " bytes to store for list");
-    bytesWritten = nvStorage.putUInt("erdCount", self->pollingListCount);
-    Serial.println("Wrote " + String(bytesWritten) + " bytes to store for count");
-    Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
-    freeEntries = nvStorage.freeEntries();
-    Serial.println("Final free entries = " + String(freeEntries));
-    nvStorage.end();
-  }
-}
+// static void save_polling_list_to_nv_data(self_t* self)
+// {
+//   if(nvStorage.begin("storage", RW_MODE)) {
+//     Serial.println("NV storage found and opened for write");
+//     if(nvStorage.clear()) {
+//       Serial.println("NV storage cleared");
+//     }
+//     else {
+//       Serial.println("NV storage not cleared");
+//     }
+//     size_t freeEntries = nvStorage.freeEntries();
+//     Serial.println("Initial free entries = " + String(freeEntries));
+//     size_t bytesWritten = nvStorage.putBytes("erdList", self->erd_polling_list, sizeof(self->erd_polling_list));
+//     Serial.println("Wrote " + String(bytesWritten) + " bytes to store for list");
+//     bytesWritten = nvStorage.putUInt("erdCount", self->pollingListCount);
+//     Serial.println("Wrote " + String(bytesWritten) + " bytes to store for count");
+//     Serial.println("Stored number of polled ERDs is " + String(self->pollingListCount));
+//     freeEntries = nvStorage.freeEntries();
+//     Serial.println("Final free entries = " + String(freeEntries));
+//     nvStorage.end();
+//   }
+// }
 
 static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
 {
@@ -319,7 +319,7 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
-        save_polling_list_to_nv_data(self);
+        // save_polling_list_to_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
       }
       break;
@@ -334,7 +334,7 @@ static tiny_hsm_result_t state_add_appliance_erds(tiny_hsm_t* hsm, tiny_hsm_sign
         args->read_completed.data_size);
 
       if(!SendNextReadRequest(self)) {
-        save_polling_list_to_nv_data(self);
+        // save_polling_list_to_nv_data(self);
         tiny_hsm_transition(hsm, state_polling);
       }
       break;
@@ -399,14 +399,14 @@ static tiny_hsm_result_t state_polling(tiny_hsm_t* hsm, tiny_hsm_signal_t signal
       break;
 
     case signal_mqtt_disconnected:
-      if(valid_nv_data_loaded(self)) {
-        Serial.println("Start HSM with previously discovered appliance");
-        tiny_hsm_transition(&self->hsm, state_polling);
-      }
-      else {
-        Serial.println("Start HSM and identify new appliance");
-        tiny_hsm_transition(&self->hsm, state_identify_appliance);
-      }
+      // if(valid_nv_data_loaded(self)) {
+      //   Serial.println("Start HSM with previously discovered appliance");
+      //   tiny_hsm_transition(&self->hsm, state_polling);
+      // }
+      // else {
+      Serial.println("Start HSM and identify new appliance");
+      tiny_hsm_transition(&self->hsm, state_identify_appliance);
+      // }
       break;
 
     case tiny_hsm_signal_exit:
@@ -486,14 +486,14 @@ void gea3_mqtt_bridge_init(
     });
   tiny_event_subscribe(mqtt_client_on_mqtt_disconnect(mqtt_client), &self->mqtt_disconnect_subscription);
 
-  if(valid_nv_data_loaded(self)) {
-    Serial.println("Start HSM with previously discovered appliance");
-    tiny_hsm_init(&self->hsm, &hsm_configuration, state_polling);
-  }
-  else {
-    Serial.println("Start HSM and identify new appliance");
-    tiny_hsm_init(&self->hsm, &hsm_configuration, state_identify_appliance);
-  }
+  // if(valid_nv_data_loaded(self)) {
+  //   Serial.println("Start HSM with previously discovered appliance");
+  //   tiny_hsm_init(&self->hsm, &hsm_configuration, state_polling);
+  // }
+  // else {
+  Serial.println("Start HSM and identify new appliance");
+  tiny_hsm_init(&self->hsm, &hsm_configuration, state_identify_appliance);
+  // }
 
   Serial.println("Bridge init done");
 }
