@@ -87,6 +87,57 @@ static void connectToMqtt()
 
     bridge.notifyMqttDisconnected();
   }
+  else {
+  }
+}
+
+void onceEveryFiveSeconds()
+{
+  Serial.println("Every 5 seconds");
+}
+
+void onceEveryFifteenSeconds()
+{
+  Serial.println("Every 15 seconds");
+}
+
+void flashHeartbeatLed()
+{
+  static bool state;
+  state = !state;
+  digitalWrite(LED_HEARTBEAT, !state);
+}
+
+// Simple scheduler stolen from Rick Suel's IoT class
+typedef struct
+{
+  unsigned long previousMillis;
+  unsigned long elapsedMillis;
+  unsigned long timeoutMillis;
+  void (*callback)();
+} Timer_t;
+
+static Timer_t schedulerTable[] = {
+  { 0, 0, 500, &flashHeartbeatLed },
+  { 0, 0, 1000, &connectToMqtt },
+  { 0, 0, 5000, &onceEveryFiveSeconds },
+  { 0, 0, 15000, &onceEveryFifteenSeconds },
+};
+
+void runScheduler()
+{
+  // Run each timer in the scheduler table, and call
+  for(int i = 0; i < sizeof(schedulerTable) / sizeof(Timer_t); i++) {
+    // Note: millis() will overflow after ~50 days.
+    unsigned long currentMillis = millis();
+    Timer_t* t = &schedulerTable[i];
+    t->elapsedMillis += currentMillis - t->previousMillis;
+    t->previousMillis = currentMillis;
+    if(t->elapsedMillis >= t->timeoutMillis) {
+      t->elapsedMillis = 0;
+      t->callback();
+    }
+  }
 }
 
 void setup()
@@ -108,7 +159,6 @@ void setup()
 
 void loop()
 {
-  connectToMqtt();
   bridge.loop();
-  digitalWrite(LED_HEARTBEAT, millis() % 1000 < 500);
+  runScheduler();
 }
