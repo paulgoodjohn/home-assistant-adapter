@@ -76,6 +76,11 @@ void HomeAssistantGea2Bridge::loop()
   tiny_gea2_interface_run(&gea2_interface);
 }
 
+tiny_erd_t HomeAssistantGea2Bridge::lastErdReadSuccessfully()
+{
+  return gea2_mqtt_bridge_last_erd_read_successfully(&gea2_mqtt_bridge);
+}
+
 void HomeAssistantGea2Bridge::notifyMqttDisconnected()
 {
   mqtt_client_adapter_notify_mqtt_disconnected(&client_adapter);

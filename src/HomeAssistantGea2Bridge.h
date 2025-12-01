@@ -24,6 +24,7 @@ class HomeAssistantGea2Bridge {
 
   void begin(PubSubClient& client, Stream& uart, const char* deviceId, uint8_t clientAddress = 0xE4);
   void loop();
+  tiny_erd_t lastErdReadSuccessfully();
   void notifyMqttDisconnected();
 
  private:

@@ -406,6 +406,7 @@ static tiny_hsm_result_t State_PollErdsFromList(tiny_hsm_t* hsm, tiny_hsm_signal
         args->read_completed.data,
         args->read_completed.data_size);
 
+      self->lastErdPolledSuccessfully = args->read_completed.erd;
       SendNextPollReadRequest(self);
       break;
 
@@ -507,6 +508,11 @@ void gea2_mqtt_bridge_init(
   }
 
   Serial.println("Bridge init done");
+}
+
+tiny_erd_t gea2_mqtt_bridge_last_erd_read_successfully(self_t* self)
+{
+  return self->lastErdPolledSuccessfully;
 }
 
 void gea2_mqtt_bridge_destroy(self_t* self)

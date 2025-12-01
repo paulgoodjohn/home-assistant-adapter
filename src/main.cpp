@@ -12,6 +12,8 @@ static WiFiClient wifiClient;
 static PubSubClient mqttClient(wifiClient);
 static HomeAssistantGea2Bridge bridge;
 
+static uint32_t uptime;
+
 static void connectToWifi()
 {
   if(WiFi.status() == WL_CONNECTED) {
@@ -78,6 +80,7 @@ static void connectToMqtt()
       if(mqttClient.connect("", mqttUser, mqttPassword)) {
         Serial.println("connected");
         digitalWrite(LED_MQTT, HIGH);
+        uptime = 0;
       }
       else {
         Serial.println("failed, rc=" + String(mqttClient.state()) + " will try again in 1 second");
@@ -91,14 +94,25 @@ static void connectToMqtt()
   }
 }
 
-void onceEveryFiveSeconds()
+void onceEverySevenSeconds()
 {
-  Serial.println("Every 5 seconds");
+  auto topic = String("geappliances/") + deviceId + "/lastErd";
+
+  auto payload = String(bridge.lastErdReadSuccessfully(), HEX);
+  while(payload.length() < 4) {
+    payload = "0" + payload;
+  }
+  payload = "0x" + payload;
+
+  mqttClient.publish(topic.c_str(), payload.c_str(), true);
 }
 
 void onceEveryFifteenSeconds()
 {
-  Serial.println("Every 15 seconds");
+  auto topic = String("geappliances/") + deviceId + "/uptime";
+  uptime += 15;
+  auto payload = String(uptime);
+  mqttClient.publish(topic.c_str(), payload.c_str(), true);
 }
 
 void flashHeartbeatLed()
@@ -120,7 +134,7 @@ typedef struct
 static Timer_t schedulerTable[] = {
   { 0, 0, 500, &flashHeartbeatLed },
   { 0, 0, 1000, &connectToMqtt },
-  { 0, 0, 5000, &onceEveryFiveSeconds },
+  { 0, 0, 7000, &onceEverySevenSeconds },
   { 0, 0, 15000, &onceEveryFifteenSeconds },
 };
 

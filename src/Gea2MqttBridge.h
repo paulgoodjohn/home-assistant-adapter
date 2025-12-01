@@ -13,6 +13,7 @@
 
 #define POLLING_LIST_MAX_SIZE 256
 typedef struct {
+  tiny_erd_t lastErdPolledSuccessfully;
   tiny_erd_t erd_polling_list[POLLING_LIST_MAX_SIZE];
   uint16_t pollingListCount;
   tiny_timer_group_t* timer_group;
@@ -41,6 +42,12 @@ void gea2_mqtt_bridge_init(
   tiny_timer_group_t* timer_group,
   i_tiny_gea2_erd_client_t* erd_client,
   i_mqtt_client_t* mqtt_client);
+
+/*!
+ * Read last ERD that was read
+ */
+tiny_erd_t gea2_mqtt_bridge_last_erd_read_successfully(
+  Gea2MqttBridge_t* self);
 
 /*!
  * Destroy the MQTT bridge.
