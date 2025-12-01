@@ -115,6 +115,13 @@ void onceEveryFifteenSeconds()
   mqttClient.publish(topic.c_str(), payload.c_str(), true);
 }
 
+void onceEveryThreeSeconds()
+{
+  auto topic = String("geappliances/") + deviceId + "/minHeap";
+  auto payload = String(esp_get_minimum_free_heap_size());
+  mqttClient.publish(topic.c_str(), payload.c_str(), true);
+}
+
 void flashHeartbeatLed()
 {
   static bool state;
@@ -134,6 +141,7 @@ typedef struct
 static Timer_t schedulerTable[] = {
   { 0, 0, 500, &flashHeartbeatLed },
   { 0, 0, 1000, &connectToMqtt },
+  { 0, 0, 3000, &onceEveryThreeSeconds },
   { 0, 0, 7000, &onceEverySevenSeconds },
   { 0, 0, 15000, &onceEveryFifteenSeconds },
 };
