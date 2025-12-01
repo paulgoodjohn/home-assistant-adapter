@@ -11,11 +11,10 @@ extern "C" {
 #include "tiny_gea_constants.h"
 #include "tiny_utils.h"
 }
+#include "ApplianceErds.h"
 
 #include <Preferences.h>
 #include <set>
-
-#include "ErdLists.h"
 
 using namespace std;
 typedef Gea2MqttBridge_t self_t;
@@ -196,9 +195,6 @@ static tiny_hsm_result_t State_IdentifyAppliance(tiny_hsm_t* hsm, tiny_hsm_signa
 
       const uint8_t* applianceTypeResponse = (const uint8_t*)args->read_completed.data;
       self->appliance_type = *applianceTypeResponse;
-      if(self->appliance_type >= maximumApplianceType) {
-        self->appliance_type = 0;
-      }
       tiny_hsm_transition(hsm, State_AddCommonErds);
       break;
     }
@@ -245,15 +241,16 @@ static tiny_hsm_result_t State_AddCommonErds(tiny_hsm_t* hsm, tiny_hsm_signal_t 
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
 
   switch(signal) {
-    case tiny_hsm_signal_entry:
-      self->applianceErdList = commonErds;
-      self->applianceErdListCount = commonErdCount;
+    case tiny_hsm_signal_entry: {
+      const tiny_erd_list_t* commonErds = GetCommonErdList();
+      self->applianceErdList = commonErds->erdList;
+      self->applianceErdListCount = commonErds->erdCount;
       Serial.println("Starting looking for " + String(self->applianceErdListCount) + " common erds");
       self->erd_index = 0;
       self->pollingListCount = 0;
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
       arm_timer(self, retry_delay);
-      break;
+    } break;
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
@@ -287,15 +284,16 @@ static tiny_hsm_result_t State_AddEnergyErds(tiny_hsm_t* hsm, tiny_hsm_signal_t 
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   switch(signal) {
-    case tiny_hsm_signal_entry:
-      self->applianceErdList = energyErds;
-      self->applianceErdListCount = energyErdCount;
+    case tiny_hsm_signal_entry: {
+      const tiny_erd_list_t* energyErds = GetEnergyErdList();
+      self->applianceErdList = energyErds->erdList;
+      self->applianceErdListCount = energyErds->erdCount;
       Serial.println("Starting looking for " + String(self->applianceErdListCount) + " energy erds");
       self->erd_index = 0;
 
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
       arm_timer(self, retry_delay);
-      break;
+    } break;
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
@@ -329,16 +327,17 @@ static tiny_hsm_result_t State_AddApplianceErds(tiny_hsm_t* hsm, tiny_hsm_signal
   self_t* self = container_of(self_t, hsm, hsm);
   auto args = reinterpret_cast<const tiny_gea2_erd_client_on_activity_args_t*>(data);
   switch(signal) {
-    case tiny_hsm_signal_entry:
-      self->applianceErdList = applianceTypeToErdGroupTranslation[self->appliance_type].erdList;
-      self->applianceErdListCount = applianceTypeToErdGroupTranslation[self->appliance_type].erdCount;
+    case tiny_hsm_signal_entry: {
+      const tiny_erd_list_t* applianceErds = GetApplianceErdList(self->appliance_type);
+      self->applianceErdList = applianceErds->erdList;
+      self->applianceErdListCount = applianceErds->erdCount;
       Serial.println();
       Serial.println("Starting looking for " + String(self->applianceErdListCount) + " appliance erds");
       self->erd_index = 0;
 
       tiny_gea2_erd_client_read(self->erd_client, &self->request_id, self->erd_host_address, self->applianceErdList[self->erd_index]);
       arm_timer(self, retry_delay);
-      break;
+    } break;
 
     case signal_timer_expired:
       if(!SendNextReadRequest(self)) {
