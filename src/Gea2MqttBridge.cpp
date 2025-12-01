@@ -21,7 +21,9 @@ typedef Gea2MqttBridge_t self_t;
 
 enum {
   retry_delay = 3000,
-  appliance_lost_timeout = 60000
+  appliance_lost_timeout = 60000,
+  mqtt_info_update_period = 3000,
+  ticks_per_second = 1000
 };
 
 enum {
@@ -102,6 +104,43 @@ static void ClearNVStorage(self_t* self)
     }
     nvStorage.end();
   }
+}
+
+static void publishMqttInfo(void* context)
+{
+  self_t* self = (self_t*)context;
+  auto uptimeTopic = String("geappliances/") + self->deviceId + "/uptime";
+  self->uptime += (mqtt_info_update_period / ticks_per_second);
+  auto uptimePayload = String(self->uptime);
+  self->pubSubClient->publish(uptimeTopic.c_str(), uptimePayload.c_str(), true);
+
+  auto minHeapTopic = String("geappliances/") + self->deviceId + "/minHeap";
+  auto minHeapPayload = String(esp_get_minimum_free_heap_size());
+  self->pubSubClient->publish(minHeapTopic.c_str(), minHeapPayload.c_str(), true);
+
+  auto currentHeapTopic = String("geappliances/") + self->deviceId + "/currentHeap";
+  auto currentHeapPayload = String(esp_get_free_heap_size());
+  self->pubSubClient->publish(currentHeapTopic.c_str(), currentHeapPayload.c_str(), true);
+
+  auto lastErdTopic = String("geappliances/") + self->deviceId + "/lastErd";
+  auto lastErdPayload = String(self->lastErdPolledSuccessfully, HEX);
+  while(lastErdPayload.length() < 4) {
+    lastErdPayload = "0" + lastErdPayload;
+  }
+  lastErdPayload = "0x" + lastErdPayload;
+  self->pubSubClient->publish(lastErdTopic.c_str(), lastErdPayload.c_str(), true);
+}
+
+static void startMqttInfoTimer(self_t* self)
+{
+  self->uptime = 0;
+  tiny_timer_start_periodic(self->timer_group, &self->mqttInformationTimer, mqtt_info_update_period, self, publishMqttInfo);
+}
+
+static void stopMqttInfoTimer(self_t* self)
+{
+  self->uptime = 0xFFFFFFFF;
+  tiny_timer_stop(self->timer_group, &self->mqttInformationTimer);
 }
 
 static void arm_timer(self_t* self, tiny_timer_ticks_t ticks)
@@ -449,13 +488,18 @@ void gea2_mqtt_bridge_init(
   self_t* self,
   tiny_timer_group_t* timer_group,
   i_tiny_gea2_erd_client_t* erd_client,
-  i_mqtt_client_t* mqtt_client)
+  i_mqtt_client_t* mqtt_client,
+  PubSubClient* pubSubClient,
+  const char* deviceId)
 {
   Serial.println("Bridge init start");
   self->timer_group = timer_group;
   self->erd_client = erd_client;
   self->mqtt_client = mqtt_client;
+  self->pubSubClient = pubSubClient;
   self->erd_set = reinterpret_cast<void*>(new set<tiny_erd_t>());
+  self->deviceId = deviceId;
+  startMqttInfoTimer(self);
 
   tiny_event_subscription_init(
     &self->erd_client_activity_subscription, self, +[](void* context, const void* _args) {
@@ -510,12 +554,10 @@ void gea2_mqtt_bridge_init(
   Serial.println("Bridge init done");
 }
 
-tiny_erd_t gea2_mqtt_bridge_last_erd_read_successfully(self_t* self)
-{
-  return self->lastErdPolledSuccessfully;
-}
-
 void gea2_mqtt_bridge_destroy(self_t* self)
 {
+  Serial.println("Bridge destroy start");
+  stopMqttInfoTimer(self);
   delete reinterpret_cast<set<tiny_erd_t>*>(self->erd_set);
+  Serial.println("Bridge destroy done");
 }

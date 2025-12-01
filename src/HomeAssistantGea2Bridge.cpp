@@ -65,7 +65,9 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
     &gea2_mqtt_bridge,
     &timer_group,
     &erd_client.interface,
-    &client_adapter.interface);
+    &client_adapter.interface,
+    &pubSubClient,
+    deviceId);
   Serial.println("GEA2 bridge started");
 }
 
@@ -74,11 +76,6 @@ void HomeAssistantGea2Bridge::loop()
   pubSubClient->loop();
   tiny_timer_group_run(&timer_group);
   tiny_gea2_interface_run(&gea2_interface);
-}
-
-tiny_erd_t HomeAssistantGea2Bridge::lastErdReadSuccessfully()
-{
-  return gea2_mqtt_bridge_last_erd_read_successfully(&gea2_mqtt_bridge);
 }
 
 void HomeAssistantGea2Bridge::notifyMqttDisconnected()

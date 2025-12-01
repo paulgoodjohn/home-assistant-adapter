@@ -90,76 +90,6 @@ static void connectToMqtt()
 
     bridge.notifyMqttDisconnected();
   }
-  else {
-  }
-}
-
-void onceEverySevenSeconds()
-{
-  auto topic = String("geappliances/") + deviceId + "/lastErd";
-
-  auto payload = String(bridge.lastErdReadSuccessfully(), HEX);
-  while(payload.length() < 4) {
-    payload = "0" + payload;
-  }
-  payload = "0x" + payload;
-
-  mqttClient.publish(topic.c_str(), payload.c_str(), true);
-}
-
-void onceEveryFifteenSeconds()
-{
-  auto topic = String("geappliances/") + deviceId + "/uptime";
-  uptime += 15;
-  auto payload = String(uptime);
-  mqttClient.publish(topic.c_str(), payload.c_str(), true);
-}
-
-void onceEveryThreeSeconds()
-{
-  auto topic = String("geappliances/") + deviceId + "/minHeap";
-  auto payload = String(esp_get_minimum_free_heap_size());
-  mqttClient.publish(topic.c_str(), payload.c_str(), true);
-}
-
-void flashHeartbeatLed()
-{
-  static bool state;
-  state = !state;
-  digitalWrite(LED_HEARTBEAT, !state);
-}
-
-// Simple scheduler stolen from Rick Suel's IoT class
-typedef struct
-{
-  unsigned long previousMillis;
-  unsigned long elapsedMillis;
-  unsigned long timeoutMillis;
-  void (*callback)();
-} Timer_t;
-
-static Timer_t schedulerTable[] = {
-  { 0, 0, 500, &flashHeartbeatLed },
-  { 0, 0, 1000, &connectToMqtt },
-  { 0, 0, 3000, &onceEveryThreeSeconds },
-  { 0, 0, 7000, &onceEverySevenSeconds },
-  { 0, 0, 15000, &onceEveryFifteenSeconds },
-};
-
-void runScheduler()
-{
-  // Run each timer in the scheduler table, and call
-  for(int i = 0; i < sizeof(schedulerTable) / sizeof(Timer_t); i++) {
-    // Note: millis() will overflow after ~50 days.
-    unsigned long currentMillis = millis();
-    Timer_t* t = &schedulerTable[i];
-    t->elapsedMillis += currentMillis - t->previousMillis;
-    t->previousMillis = currentMillis;
-    if(t->elapsedMillis >= t->timeoutMillis) {
-      t->elapsedMillis = 0;
-      t->callback();
-    }
-  }
 }
 
 void setup()
@@ -181,6 +111,7 @@ void setup()
 
 void loop()
 {
+  connectToMqtt();
   bridge.loop();
-  runScheduler();
+  digitalWrite(LED_HEARTBEAT, millis() % 1000 < 500);
 }
