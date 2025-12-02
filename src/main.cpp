@@ -12,8 +12,6 @@ static WiFiClient wifiClient;
 static PubSubClient mqttClient(wifiClient);
 static HomeAssistantGea2Bridge bridge;
 
-static uint32_t uptime;
-
 static void connectToWifi()
 {
   if(WiFi.status() == WL_CONNECTED) {
@@ -80,7 +78,6 @@ static void connectToMqtt()
       if(mqttClient.connect("", mqttUser, mqttPassword)) {
         Serial.println("connected");
         digitalWrite(LED_MQTT, HIGH);
-        uptime = 0;
       }
       else {
         Serial.println("failed, rc=" + String(mqttClient.state()) + " will try again in 1 second");
