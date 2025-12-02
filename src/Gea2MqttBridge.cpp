@@ -22,7 +22,7 @@ typedef Gea2MqttBridge_t self_t;
 enum {
   retry_delay = 3000,
   appliance_lost_timeout = 60000,
-  mqtt_info_update_period = 3000,
+  mqtt_info_update_period = 1000,
   ticks_per_second = 1000
 };
 
