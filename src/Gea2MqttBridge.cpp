@@ -109,26 +109,23 @@ static void ClearNVStorage(self_t* self)
 static void publishMqttInfo(void* context)
 {
   self_t* self = (self_t*)context;
-  auto uptimeTopic = String("geappliances/") + self->deviceId + "/uptime";
+
   self->uptime += (mqtt_info_update_period / ticks_per_second);
   auto uptimePayload = String(self->uptime);
-  self->pubSubClient->publish(uptimeTopic.c_str(), uptimePayload.c_str(), true);
+  mqtt_client_publish_sub_topic(self->mqtt_client, "uptime", uptimePayload.c_str());
 
-  auto minHeapTopic = String("geappliances/") + self->deviceId + "/minHeap";
   auto minHeapPayload = String(esp_get_minimum_free_heap_size());
-  self->pubSubClient->publish(minHeapTopic.c_str(), minHeapPayload.c_str(), true);
+  mqtt_client_publish_sub_topic(self->mqtt_client, "minHeap", minHeapPayload.c_str());
 
-  auto currentHeapTopic = String("geappliances/") + self->deviceId + "/currentHeap";
   auto currentHeapPayload = String(esp_get_free_heap_size());
-  self->pubSubClient->publish(currentHeapTopic.c_str(), currentHeapPayload.c_str(), true);
+  mqtt_client_publish_sub_topic(self->mqtt_client, "currentHeap", currentHeapPayload.c_str());
 
-  auto lastErdTopic = String("geappliances/") + self->deviceId + "/lastErd";
   auto lastErdPayload = String(self->lastErdPolledSuccessfully, HEX);
   while(lastErdPayload.length() < 4) {
     lastErdPayload = "0" + lastErdPayload;
   }
   lastErdPayload = "0x" + lastErdPayload;
-  self->pubSubClient->publish(lastErdTopic.c_str(), lastErdPayload.c_str(), true);
+  mqtt_client_publish_sub_topic(self->mqtt_client, "lastErd", lastErdPayload.c_str());
 }
 
 static void startMqttInfoTimer(self_t* self)
@@ -488,17 +485,13 @@ void gea2_mqtt_bridge_init(
   self_t* self,
   tiny_timer_group_t* timer_group,
   i_tiny_gea2_erd_client_t* erd_client,
-  i_mqtt_client_t* mqtt_client,
-  PubSubClient* pubSubClient,
-  const char* deviceId)
+  i_mqtt_client_t* mqtt_client)
 {
   Serial.println("Bridge init start");
   self->timer_group = timer_group;
   self->erd_client = erd_client;
   self->mqtt_client = mqtt_client;
-  self->pubSubClient = pubSubClient;
   self->erd_set = reinterpret_cast<void*>(new set<tiny_erd_t>());
-  self->deviceId = deviceId;
   startMqttInfoTimer(self);
 
   tiny_event_subscription_init(

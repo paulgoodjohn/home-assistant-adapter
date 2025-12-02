@@ -65,9 +65,7 @@ void HomeAssistantGea2Bridge::begin(PubSubClient& pubSubClient, Stream& uart, co
     &gea2_mqtt_bridge,
     &timer_group,
     &erd_client.interface,
-    &client_adapter.interface,
-    &pubSubClient,
-    deviceId);
+    &client_adapter.interface);
   Serial.println("GEA2 bridge started");
 }
 

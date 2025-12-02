@@ -6,7 +6,6 @@
 #ifndef Gea2MqttBridge_h
 #define Gea2MqttBridge_h
 
-#include <PubSubClient.h>
 #include "i_mqtt_client.h"
 #include "i_tiny_gea2_erd_client.h"
 #include "tiny_hsm.h"
@@ -14,8 +13,6 @@
 
 #define POLLING_LIST_MAX_SIZE 256
 typedef struct {
-  const char* deviceId;
-  PubSubClient* pubSubClient;
   uint32_t uptime;
   tiny_erd_t lastErdPolledSuccessfully;
   tiny_erd_t erd_polling_list[POLLING_LIST_MAX_SIZE];
@@ -46,9 +43,7 @@ void gea2_mqtt_bridge_init(
   Gea2MqttBridge_t* self,
   tiny_timer_group_t* timer_group,
   i_tiny_gea2_erd_client_t* erd_client,
-  i_mqtt_client_t* mqtt_client,
-  PubSubClient* pubSubClient,
-  const char* deviceId);
+  i_mqtt_client_t* mqtt_client);
 
 /*!
  * Destroy the MQTT bridge.
